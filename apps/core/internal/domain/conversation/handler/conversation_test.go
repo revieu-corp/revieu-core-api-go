@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -164,5 +165,85 @@ func TestConversationHandlerSendMessagePersistsMessage(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected 2 messages after send, got %d", count)
+	}
+}
+
+func TestConversationHandlerSendMessageValidatesContentTypeAndMembership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupConversationTestDB(t)
+	seedConversationFixture(t, db)
+	if err := db.Create(&model.User{ID: 503, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create unrelated user: %v", err)
+	}
+	h := NewConversationHandler(service.NewConversationService(db))
+
+	send := func(userID int64, conversationID string, payload string, authenticated bool) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: conversationID}}
+		c.Request = httptest.NewRequest(http.MethodPost, "/conversations/"+conversationID+"/messages", strings.NewReader(payload))
+		c.Request.Header.Set("Content-Type", "application/json")
+		if authenticated {
+			c.Set("user_id", userID)
+		}
+		h.SendMessage(c)
+		return recorder
+	}
+
+	invalidPayloads := []string{
+		`{"content":"   "}`,
+		`{"content":"short","message_type":"video"}`,
+		`{"content":"` + strings.Repeat("x", service.MaxConversationMessageLength+1) + `"}`,
+	}
+	for _, payload := range invalidPayloads {
+		recorder := send(501, "9001", payload, true)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected invalid message to return 400, got %d: %s", recorder.Code, recorder.Body.String())
+		}
+	}
+
+	valid := send(501, "9001", `{"content":"  image caption  ","message_type":"IMAGE"}`, true)
+	if valid.Code != http.StatusCreated {
+		t.Fatalf("expected valid message to return 201, got %d: %s", valid.Code, valid.Body.String())
+	}
+	var response struct {
+		Data struct {
+			Content     string `json:"content"`
+			MessageType string `json:"message_type"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(valid.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode valid message: %v", err)
+	}
+	if response.Data.Content != "image caption" || response.Data.MessageType != "image" {
+		t.Fatalf("expected normalized message payload, got %+v", response.Data)
+	}
+
+	for _, testCase := range []struct {
+		name           string
+		userID         int64
+		conversationID string
+		authenticated  bool
+		expected       int
+	}{
+		{name: "non-member", userID: 503, conversationID: "9001", authenticated: true, expected: http.StatusForbidden},
+		{name: "missing-conversation", userID: 501, conversationID: "9999", authenticated: true, expected: http.StatusNotFound},
+		{name: "unauthenticated", userID: 0, conversationID: "9001", authenticated: false, expected: http.StatusUnauthorized},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := send(testCase.userID, testCase.conversationID, `{"content":"hello"}`, testCase.authenticated)
+			if recorder.Code != testCase.expected {
+				t.Fatalf("expected status %d, got %d: %s", testCase.expected, recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+
+	var messageCount int64
+	if err := db.Model(&model.Message{}).Where("conversation_id = ?", 9001).Count(&messageCount).Error; err != nil {
+		t.Fatalf("failed to count messages: %v", err)
+	}
+	if messageCount != 2 {
+		t.Fatalf("invalid or unauthorized sends changed message count; expected 2, got %d", messageCount)
 	}
 }

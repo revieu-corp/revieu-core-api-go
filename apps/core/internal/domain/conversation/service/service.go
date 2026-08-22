@@ -49,6 +49,8 @@ type SendMessageInput struct {
 	MessageType string `json:"message_type"`
 }
 
+const MaxConversationMessageLength = 5000
+
 type UpdateConversationSettingsInput struct {
 	IsMuted *bool `json:"is_muted"`
 }
@@ -193,7 +195,18 @@ func (s *ConversationService) Messages(ctx context.Context, userID, conversation
 }
 
 func (s *ConversationService) SendMessage(ctx context.Context, userID, conversationID int64, input SendMessageInput) (*ConversationMessage, error) {
-	if strings.TrimSpace(input.Content) == "" {
+	content := strings.TrimSpace(input.Content)
+	if content == "" || len([]rune(content)) > MaxConversationMessageLength {
+		return nil, ErrConversationInvalidInput
+	}
+
+	messageType := strings.ToLower(strings.TrimSpace(input.MessageType))
+	if messageType == "" {
+		messageType = "text"
+	}
+	switch messageType {
+	case "text", "image", "file":
+	default:
 		return nil, ErrConversationInvalidInput
 	}
 
@@ -201,15 +214,10 @@ func (s *ConversationService) SendMessage(ctx context.Context, userID, conversat
 		return nil, err
 	}
 
-	messageType := strings.TrimSpace(input.MessageType)
-	if messageType == "" {
-		messageType = "text"
-	}
-
 	message := model.Message{
 		ConversationID: conversationID,
 		SenderID:       userID,
-		Content:        strings.TrimSpace(input.Content),
+		Content:        content,
 		MessageType:    messageType,
 		IsRead:         false,
 		CreatedAt:      time.Now().UTC(),
@@ -283,6 +291,16 @@ func (s *ConversationService) membershipForUser(ctx context.Context, userID, con
 		Where("user_id = ? AND conversation_id = ?", userID, conversationID).
 		First(&membership).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			var conversationCount int64
+			if countErr := s.db.WithContext(ctx).
+				Model(&model.Conversation{}).
+				Where("id = ?", conversationID).
+				Count(&conversationCount).Error; countErr != nil {
+				return membership, countErr
+			}
+			if conversationCount == 0 {
+				return membership, ErrConversationNotFound
+			}
 			return membership, ErrConversationForbidden
 		}
 		return membership, err

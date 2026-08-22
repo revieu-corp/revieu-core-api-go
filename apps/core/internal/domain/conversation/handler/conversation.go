@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation/service"
 )
 
 type ConversationHandler struct {
@@ -122,10 +122,13 @@ func (h *ConversationHandler) Messages(c *gin.Context) {
 // @Param id path int true "Conversation ID"
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /conversations/{id}/messages [post]
 func (h *ConversationHandler) SendMessage(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	if userID == 0 {
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -147,6 +150,8 @@ func (h *ConversationHandler) SendMessage(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrConversationForbidden):
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		case errors.Is(err, service.ErrConversationNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "conversation not found"})
 		case errors.Is(err, service.ErrConversationInvalidInput):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message"})
 		default:
