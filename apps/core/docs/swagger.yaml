@@ -1015,6 +1015,14 @@ paths:
         name: id
         required: true
         type: integer
+      - description: Cursor (message id) for older messages
+        in: query
+        name: cursor
+        type: integer
+      - description: Page size (max 100)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
@@ -1023,8 +1031,26 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
         "401":
           description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
           schema:
             additionalProperties:
               type: string

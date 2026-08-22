@@ -38,6 +38,19 @@ type ConversationMessage struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+const (
+	DefaultConversationMessageLimit = 50
+	MaxConversationMessageLimit     = 100
+)
+
+// ConversationMessageListQuery controls message history pagination.
+// Cursor is the oldest message id from the previous page; the next page
+// contains older messages.
+type ConversationMessageListQuery struct {
+	Limit  int
+	Cursor *int64
+}
+
 type CreateConversationInput struct {
 	Title          string  `json:"title"`
 	Type           string  `json:"type"`
@@ -155,19 +168,40 @@ func (s *ConversationService) Create(ctx context.Context, userID int64, input Cr
 	}, nil
 }
 
-func (s *ConversationService) Messages(ctx context.Context, userID, conversationID int64) ([]ConversationMessage, error) {
+func (s *ConversationService) Messages(ctx context.Context, userID, conversationID int64, query ConversationMessageListQuery) ([]ConversationMessage, *int64, error) {
 	membership, err := s.membershipForUser(ctx, userID, conversationID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	limit := query.Limit
+	if limit <= 0 {
+		limit = DefaultConversationMessageLimit
+	}
+	if limit > MaxConversationMessageLimit {
+		limit = MaxConversationMessageLimit
 	}
 
 	var messages []model.Message
-	if err := s.db.WithContext(ctx).
+	dbQuery := s.db.WithContext(ctx).
 		Preload("Sender.Profile").
 		Where("conversation_id = ?", conversationID).
-		Order("created_at asc").
-		Find(&messages).Error; err != nil {
-		return nil, err
+		Order("id desc").
+		Limit(limit + 1)
+	if query.Cursor != nil {
+		dbQuery = dbQuery.Where("id < ?", *query.Cursor)
+	}
+	if err := dbQuery.Find(&messages).Error; err != nil {
+		return nil, nil, err
+	}
+
+	var nextCursor *int64
+	if len(messages) > limit {
+		value := messages[limit-1].ID
+		nextCursor = &value
+		messages = messages[:limit]
+	}
+	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
+		messages[left], messages[right] = messages[right], messages[left]
 	}
 
 	now := time.Now().UTC()
@@ -175,13 +209,13 @@ func (s *ConversationService) Messages(ctx context.Context, userID, conversation
 		Model(&model.ConversationParticipant{}).
 		Where("id = ?", membership.ID).
 		Update("last_read_at", now).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := s.db.WithContext(ctx).
 		Model(&model.Message{}).
 		Where("conversation_id = ? AND sender_id <> ?", conversationID, userID).
 		Update("is_read", true).Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	result := make([]ConversationMessage, 0, len(messages))
@@ -189,7 +223,7 @@ func (s *ConversationService) Messages(ctx context.Context, userID, conversation
 		result = append(result, mapConversationMessage(message))
 	}
 
-	return result, nil
+	return result, nextCursor, nil
 }
 
 func (s *ConversationService) SendMessage(ctx context.Context, userID, conversationID int64, input SendMessageInput) (*ConversationMessage, error) {
@@ -283,6 +317,16 @@ func (s *ConversationService) membershipForUser(ctx context.Context, userID, con
 		Where("user_id = ? AND conversation_id = ?", userID, conversationID).
 		First(&membership).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			var conversationCount int64
+			if countErr := s.db.WithContext(ctx).
+				Model(&model.Conversation{}).
+				Where("id = ?", conversationID).
+				Count(&conversationCount).Error; countErr != nil {
+				return membership, countErr
+			}
+			if conversationCount == 0 {
+				return membership, ErrConversationNotFound
+			}
 			return membership, ErrConversationForbidden
 		}
 		return membership, err
