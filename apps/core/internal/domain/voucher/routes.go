@@ -19,6 +19,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 		vouchers.GET("", h.List)
 		vouchers.GET("/:id", h.Detail)
 		vouchers.GET("/code/:code", h.ByCode)
+		vouchers.DELETE("/:id", h.Delete)
 		vouchers.PATCH("/:id/use", h.Use)
 		vouchers.PATCH("/:id/status", h.UpdateStatus)
 		vouchers.POST("/share/email", h.ShareEmail)

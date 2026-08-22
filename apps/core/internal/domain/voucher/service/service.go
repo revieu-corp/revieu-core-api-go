@@ -22,6 +22,8 @@ var (
 	ErrVoucherExpired       = errors.New("voucher expired")
 )
 
+const voucherStatusArchived = "archived"
+
 type CreateVoucherRequest struct {
 	CouponID string `json:"couponId"`
 	UserID   string `json:"userId"`
@@ -83,10 +85,40 @@ func (s *VoucherService) Create(ctx context.Context, req CreateVoucherRequest) (
 
 func (s *VoucherService) List(ctx context.Context, userID int64) ([]model.Voucher, error) {
 	var list []model.Voucher
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&list).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("user_id = ? AND status <> ?", userID, voucherStatusArchived).
+		Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
+}
+
+// Delete archives a voucher from the customer's rewards list without changing
+// coupon inventory or payment history.
+func (s *VoucherService) Delete(ctx context.Context, userID, id int64) error {
+	if userID <= 0 || id <= 0 {
+		return ErrVoucherNotFound
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var voucher model.Voucher
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&voucher, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrVoucherNotFound
+			}
+			return err
+		}
+		if voucher.UserID != userID {
+			return ErrVoucherForbidden
+		}
+		if voucher.Status == voucherStatusArchived {
+			return ErrVoucherNotFound
+		}
+
+		return tx.Model(&model.Voucher{}).
+			Where("id = ? AND user_id = ? AND status <> ?", id, userID, voucherStatusArchived).
+			Update("status", voucherStatusArchived).Error
+	})
 }
 
 func (s *VoucherService) Detail(ctx context.Context, id int64) (*model.Voucher, error) {
@@ -99,7 +131,9 @@ func (s *VoucherService) Detail(ctx context.Context, id int64) (*model.Voucher, 
 
 func (s *VoucherService) DetailForUser(ctx context.Context, userID, id int64) (*model.Voucher, error) {
 	var v model.Voucher
-	if err := s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&v).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ? AND status <> ?", id, userID, voucherStatusArchived).
+		First(&v).Error; err != nil {
 		return nil, err
 	}
 	return &v, nil
@@ -115,7 +149,9 @@ func (s *VoucherService) ByCode(ctx context.Context, code string) (*model.Vouche
 
 func (s *VoucherService) ByCodeForUser(ctx context.Context, userID int64, code string) (*model.Voucher, error) {
 	var v model.Voucher
-	if err := s.db.WithContext(ctx).Where("code = ? AND user_id = ?", code, userID).First(&v).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("code = ? AND user_id = ? AND status <> ?", code, userID, voucherStatusArchived).
+		First(&v).Error; err != nil {
 		return nil, err
 	}
 	return &v, nil
