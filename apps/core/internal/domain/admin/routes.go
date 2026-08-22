@@ -13,7 +13,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	svc := service.NewAdminService(nil)
 	h := handler.NewAdminHandler(svc)
 
-	adminGroup := r.Group("/admin", authorization.JWTAuth(cfg.JWT))
+	adminGroup := r.Group("/admin", authorization.JWTAuth(cfg.JWT), authorization.RequireRole("admin"))
 	{
 		adminGroup.GET("/reports", h.ListReports)
 		adminGroup.PATCH("/reports/:id", h.UpdateReport)

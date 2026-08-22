@@ -47,3 +47,23 @@ func JWTAuth(jwtCfg config.JWTConfig) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// RequireRole authorizes an already-authenticated principal for one role.
+// It is intentionally separate from JWTAuth so routes can compose identity
+// authentication with role-based access control.
+func RequireRole(role string) gin.HandlerFunc {
+	expectedRole := strings.ToLower(strings.TrimSpace(role))
+	return func(c *gin.Context) {
+		if c.GetInt64(UserIDKey) <= 0 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+
+		actualRole := strings.ToLower(strings.TrimSpace(c.GetString(UserRoleKey)))
+		if expectedRole == "" || actualRole != expectedRole {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		c.Next()
+	}
+}
