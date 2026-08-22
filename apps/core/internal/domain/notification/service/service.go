@@ -54,13 +54,14 @@ func (s *NotificationService) MarkRead(ctx context.Context, userID, notification
 	return &notification, nil
 }
 
-func (s *NotificationService) ReadAll(ctx context.Context, userID int64) error {
+func (s *NotificationService) ReadAll(ctx context.Context, userID int64) (int64, error) {
 	now := time.Now().UTC()
-	return s.db.WithContext(ctx).
+	result := s.db.WithContext(ctx).
 		Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
 		Updates(map[string]interface{}{
 			"is_read": true,
 			"read_at": &now,
-		}).Error
+		})
+	return result.RowsAffected, result.Error
 }

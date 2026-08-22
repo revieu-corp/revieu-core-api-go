@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -122,5 +122,96 @@ func TestNotificationHandlerMarkReadUpdatesNotification(t *testing.T) {
 	}
 	if !notification.IsRead {
 		t.Fatalf("expected notification to be marked read")
+	}
+}
+
+func TestNotificationHandlerReadAllScopesUserAndIsIdempotent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupNotificationTestDB(t)
+	seedNotificationFixture(t, db)
+	if err := db.Create(&model.User{ID: 602, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create second user: %v", err)
+	}
+	oldReadAt := time.Now().Add(-2 * time.Hour).UTC()
+	if err := db.Create(&model.Notification{
+		ID:        8002,
+		UserID:    601,
+		Type:      "already-read",
+		Title:     "Already read",
+		IsRead:    true,
+		ReadAt:    &oldReadAt,
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	}).Error; err != nil {
+		t.Fatalf("failed to create already-read notification: %v", err)
+	}
+	if err := db.Create(&model.Notification{ID: 8003, UserID: 602, Type: "other-user", Title: "Other user"}).Error; err != nil {
+		t.Fatalf("failed to create other-user notification: %v", err)
+	}
+	h := NewNotificationHandler(service.NewNotificationService(db))
+
+	readAll := func(authenticated bool) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPost, "/notifications/read-all", nil)
+		if authenticated {
+			c.Set("user_id", int64(601))
+		}
+		h.ReadAll(c)
+		return recorder
+	}
+
+	firstRecorder := readAll(true)
+	if firstRecorder.Code != http.StatusOK {
+		t.Fatalf("expected first read-all status 200, got %d: %s", firstRecorder.Code, firstRecorder.Body.String())
+	}
+	var firstResponse struct {
+		UpdatedCount int64 `json:"updated_count"`
+	}
+	if err := json.Unmarshal(firstRecorder.Body.Bytes(), &firstResponse); err != nil {
+		t.Fatalf("failed to decode first read-all response: %v", err)
+	}
+	if firstResponse.UpdatedCount != 1 {
+		t.Fatalf("expected one unread notification to be updated, got %d", firstResponse.UpdatedCount)
+	}
+
+	var currentUnread, otherUser model.Notification
+	if err := db.First(&currentUnread, 8001).Error; err != nil {
+		t.Fatalf("failed to reload current user's notification: %v", err)
+	}
+	if !currentUnread.IsRead || currentUnread.ReadAt == nil {
+		t.Fatal("expected current user's unread notification to be marked read")
+	}
+	var alreadyRead model.Notification
+	if err := db.First(&alreadyRead, 8002).Error; err != nil {
+		t.Fatalf("failed to reload already-read notification: %v", err)
+	}
+	if alreadyRead.ReadAt == nil || !alreadyRead.ReadAt.Equal(oldReadAt) {
+		t.Fatalf("expected existing read_at to remain unchanged, got %v", alreadyRead.ReadAt)
+	}
+	if err := db.First(&otherUser, 8003).Error; err != nil {
+		t.Fatalf("failed to reload other user's notification: %v", err)
+	}
+	if otherUser.IsRead {
+		t.Fatal("expected another user's notification to remain unread")
+	}
+
+	secondRecorder := readAll(true)
+	if secondRecorder.Code != http.StatusOK {
+		t.Fatalf("expected repeated read-all status 200, got %d", secondRecorder.Code)
+	}
+	var secondResponse struct {
+		UpdatedCount int64 `json:"updated_count"`
+	}
+	if err := json.Unmarshal(secondRecorder.Body.Bytes(), &secondResponse); err != nil {
+		t.Fatalf("failed to decode repeated read-all response: %v", err)
+	}
+	if secondResponse.UpdatedCount != 0 {
+		t.Fatalf("expected repeated read-all to update zero notifications, got %d", secondResponse.UpdatedCount)
+	}
+
+	unauthorizedRecorder := readAll(false)
+	if unauthorizedRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 without user id, got %d", unauthorizedRecorder.Code)
 	}
 }

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 )
 
 type NotificationHandler struct {
@@ -82,19 +82,20 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 // @Description Marks all notifications as read for the authenticated user
 // @Tags notification
 // @Produce json
-// @Success 200 {object} map[string]string
+// @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Router /notifications/read-all [post]
 func (h *NotificationHandler) ReadAll(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	if userID == 0 {
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	if err := h.svc.ReadAll(c.Request.Context(), userID); err != nil {
+	updatedCount, err := h.svc.ReadAll(c.Request.Context(), userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update notifications"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	c.JSON(http.StatusOK, gin.H{"message": "ok", "updated_count": updatedCount})
 }
