@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon/service"
 )
 
 type CouponHandler struct {
@@ -255,13 +255,31 @@ func (h *CouponHandler) Redeem(c *gin.Context) {
 
 // ListPackages godoc
 // @Summary List packages
-// @Description Returns a list of available packages
+// @Description Returns a paginated list of active packages with active coupons
 // @Tags package
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Param limit query int false "Page size (1-100)" default(20)
+// @Param cursor query int false "ID cursor for the next page"
+// @Success 200 {object} service.PackagePage
+// @Failure 400 {object} map[string]string
 // @Router /packages [get]
 func (h *CouponHandler) ListPackages(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
+	limit, cursor, err := parsePackagePageQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid package query"})
+		return
+	}
+
+	page, err := h.svc.ListPackages(c.Request.Context(), service.ListPackagesQuery{Limit: limit, Cursor: cursor})
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCouponInput) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid package query"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list packages"})
+		return
+	}
+	c.JSON(http.StatusOK, page)
 }
 
 // PackageDetail godoc
@@ -270,11 +288,48 @@ func (h *CouponHandler) ListPackages(c *gin.Context) {
 // @Tags package
 // @Produce json
 // @Param id path int true "Package ID"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} service.PackageResponse
+// @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Router /packages/{id} [get]
 func (h *CouponHandler) PackageDetail(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid package id"})
+		return
+	}
+
+	pkg, err := h.svc.PackageDetail(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrPackageNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "package not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load package"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": pkg})
+}
+
+func parsePackagePageQuery(c *gin.Context) (int, int64, error) {
+	limit := 0
+	if rawLimit := c.Query("limit"); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			return 0, 0, err
+		}
+		limit = parsed
+	}
+
+	cursor := int64(0)
+	if rawCursor := c.Query("cursor"); rawCursor != "" {
+		parsed, err := strconv.ParseInt(rawCursor, 10, 64)
+		if err != nil {
+			return 0, 0, err
+		}
+		cursor = parsed
+	}
+	return limit, cursor, nil
 }
 
 func couponErrorStatus(err error) (int, string) {

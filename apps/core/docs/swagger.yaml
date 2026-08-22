@@ -7,6 +7,20 @@ definitions:
           type: string
         type: array
     type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.PackagePage:
+    properties:
+      cursor:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Package'
+        type: array
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.PackageResponse:
+    properties:
+      data:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Package'
+    type: object
   github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_media_dto.FileRequest:
     properties:
       content_type:
@@ -414,6 +428,332 @@ definitions:
         type: integer
       voucher_status:
         type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Category:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Category'
+        type: array
+      icon_url:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      parent:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Category'
+      parent_id:
+        type: integer
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Coupon:
+    properties:
+      claimed_count:
+        type: integer
+      coupon_type:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      discount_percentage:
+        type: number
+      expiry_date:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      max_per_user:
+        type: integer
+      merchant_id:
+        type: integer
+      original_price:
+        type: number
+      package_id:
+        type: integer
+      price:
+        type: number
+      redeemed_count:
+        type: integer
+      sale_price:
+        type: number
+      status:
+        type: string
+      store_id:
+        type: integer
+      terms:
+        type: string
+      title:
+        type: string
+      total_quantity:
+        type: integer
+      type:
+        type: string
+      updated_at:
+        type: string
+      valid_from:
+        type: string
+      valid_until:
+        type: string
+      value:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Merchant:
+    properties:
+      address:
+        type: string
+      avg_rating:
+        type: number
+      business_name:
+        type: string
+      business_type:
+        type: string
+      category:
+        type: string
+      contact_email:
+        type: string
+      contact_phone:
+        type: string
+      cover_image:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      follower_count:
+        type: integer
+      id:
+        type: integer
+      logo_url:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      review_count:
+        type: integer
+      social_links:
+        type: string
+      status:
+        type: integer
+      stores:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Store'
+        type: array
+      total_reviews:
+        type: integer
+      total_stores:
+        type: integer
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.User'
+      user_id:
+        type: integer
+      verification_status:
+        type: string
+      verified_at:
+        type: string
+      website_url:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Package:
+    properties:
+      coupons:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Coupon'
+        type: array
+      created_at:
+        type: string
+      description:
+        type: string
+      discount_percentage:
+        type: number
+      id:
+        type: integer
+      image_url:
+        type: string
+      merchant:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Merchant'
+      merchant_id:
+        type: integer
+      original_price:
+        type: number
+      sale_price:
+        type: number
+      sold_count:
+        type: integer
+      status:
+        type: string
+      store_id:
+        type: integer
+      terms:
+        type: string
+      title:
+        type: string
+      total_quantity:
+        type: integer
+      updated_at:
+        type: string
+      valid_from:
+        type: string
+      valid_until:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Store:
+    properties:
+      address:
+        type: string
+      avg_rating:
+        type: number
+      categories:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Category'
+        type: array
+      city:
+        type: string
+      country:
+        type: string
+      cover_image_url:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      follower_count:
+        type: integer
+      hours:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.StoreHour'
+        type: array
+      id:
+        type: integer
+      images:
+        type: string
+      latitude:
+        type: number
+      longitude:
+        type: number
+      menu_images:
+        type: string
+      merchant:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Merchant'
+      merchant_id:
+        type: integer
+      name:
+        type: string
+      phone:
+        type: string
+      review_count:
+        type: integer
+      state:
+        type: string
+      status:
+        type: integer
+      updated_at:
+        type: string
+      website:
+        type: string
+      zip_code:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.StoreHour:
+    properties:
+      close_time:
+        type: string
+      day_of_week:
+        type: integer
+      id:
+        type: integer
+      is_closed:
+        type: boolean
+      open_time:
+        type: string
+      store_id:
+        type: integer
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.User:
+    properties:
+      auths:
+        description: Relations
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.UserAuth'
+        type: array
+      created_at:
+        type: string
+      id:
+        type: integer
+      profile:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.UserProfile'
+      role:
+        description: '''user'', ''admin'''
+        type: string
+      status:
+        description: '0: active, 1: banned, 2: pending'
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.UserAuth:
+    properties:
+      id:
+        type: integer
+      identifier:
+        description: email地址 或 open_id/sub
+        type: string
+      identity_type:
+        description: '''email'', ''google'', ''apple'''
+        type: string
+      last_login_at:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.User'
+      user_id:
+        type: integer
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.UserProfile:
+    properties:
+      avatar_url:
+        type: string
+      coupon_count:
+        type: integer
+      follower_count:
+        description: Stats (denormalized)
+        type: integer
+      following_count:
+        type: integer
+      intro:
+        description: 一句话简介
+        type: string
+      like_count:
+        type: integer
+      location:
+        type: string
+      nickname:
+        type: string
+      post_count:
+        type: integer
+      review_count:
+        type: integer
+      user:
+        $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.User'
+      user_id:
+        type: integer
+    type: object
+  gorm.DeletedAt:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
     type: object
   internal_domain_auth.ForgotPasswordRequest:
     properties:
@@ -2310,14 +2650,29 @@ paths:
       - order
   /packages:
     get:
-      description: Returns a list of available packages
+      description: Returns a paginated list of active packages with active coupons
+      parameters:
+      - default: 20
+        description: Page size (1-100)
+        in: query
+        name: limit
+        type: integer
+      - description: ID cursor for the next page
+        in: query
+        name: cursor
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.PackagePage'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
       summary: List packages
       tags:
@@ -2337,7 +2692,12 @@ paths:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.PackageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "404":
           description: Not Found
