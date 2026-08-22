@@ -953,7 +953,7 @@ paths:
       - auth
   /categories:
     get:
-      description: Returns a list of all categories
+      description: Returns all categories as a parent-to-child hierarchy
       produces:
       - application/json
       responses:
@@ -961,6 +961,12 @@ paths:
           description: OK
           schema:
             additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
             type: object
       summary: List categories
       tags:

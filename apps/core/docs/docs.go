@@ -636,7 +636,7 @@ const docTemplate = `{
         },
         "/categories": {
             "get": {
-                "description": "Returns a list of all categories",
+                "description": "Returns all categories as a parent-to-child hierarchy",
                 "produces": [
                     "application/json"
                 ],
@@ -650,6 +650,15 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }

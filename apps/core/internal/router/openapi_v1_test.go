@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/testutil"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/token"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/gin-gonic/gin"
 )
 
 func setupAPITest(t *testing.T) (*gin.Engine, string) {
@@ -81,6 +81,39 @@ func TestMerchantsList(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestCategoriesListReturnsHierarchy(t *testing.T) {
+	r, _ := setupAPITest(t)
+	db := database.DB
+	root := model.Category{Name: "Food"}
+	if err := db.Create(&root).Error; err != nil {
+		t.Fatalf("failed to create root category: %v", err)
+	}
+	child := model.Category{Name: "Cafe", ParentID: &root.ID}
+	if err := db.Create(&child).Error; err != nil {
+		t.Fatalf("failed to create child category: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/categories", nil)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var response struct {
+		Data []model.Category `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode categories response: %v", err)
+	}
+	if len(response.Data) != 1 || response.Data[0].Name != "Food" {
+		t.Fatalf("expected one root category, got %#v", response.Data)
+	}
+	if len(response.Data[0].Children) != 1 || response.Data[0].Children[0].Name != "Cafe" {
+		t.Fatalf("expected nested Cafe category, got %#v", response.Data[0].Children)
 	}
 }
 
