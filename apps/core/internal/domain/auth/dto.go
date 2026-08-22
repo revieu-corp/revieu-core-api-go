@@ -20,6 +20,12 @@ type ForgotPasswordRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
 
+// ResetPasswordRequest consumes a password reset token.
+type ResetPasswordRequest struct {
+	Token    string `json:"token" binding:"required"`
+	Password string `json:"password" binding:"required,min=6"`
+}
+
 // RegisterResponse is returned on successful registration.
 type RegisterResponse struct {
 	Message string `json:"message"`

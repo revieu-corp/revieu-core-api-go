@@ -10,6 +10,7 @@ func All() []interface{} {
 		&UserAuth{},
 		&UserProfile{},
 		&EmailVerification{},
+		&PasswordResetToken{},
 		&RefreshToken{},
 		// Social
 		&UserFollow{},

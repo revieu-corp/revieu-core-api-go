@@ -413,8 +413,47 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email"})
 		return
 	}
-	// Placeholder: do not reveal if the user exists.
-	c.JSON(http.StatusOK, gin.H{})
+
+	baseURL := strings.TrimRight(strings.TrimSpace(h.frontendURL), "/")
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("%s://%s", h.requestScheme(c), c.Request.Host)
+	}
+	if err := h.svc.RequestPasswordReset(c.Request.Context(), req.Email, baseURL); err != nil {
+		logger.Error(c.Request.Context(), "Password reset request failed",
+			"event", "password_reset_request_failed",
+			"error", err.Error(),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password reset is temporarily unavailable"})
+		return
+	}
+
+	// Keep the same response for known and unknown addresses.
+	c.JSON(http.StatusOK, gin.H{"message": "If an account exists, a password reset link has been sent."})
+}
+
+// ResetPassword godoc
+// @Summary Reset password with a token
+// @Description Consumes a single-use password reset token and updates the password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body ResetPasswordRequest true "Reset Password Request"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Router /auth/reset-password [post]
+func (h *Handler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.svc.ResetPassword(c.Request.Context(), req.Token, req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired password reset token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password reset successfully"})
 }
 
 // VerifyEmail godoc

@@ -164,3 +164,28 @@ func (c *SMTPClient) SendVerificationEmail(to, verifyURL string) error {
 
 	return c.SendEmailHTML(to, subject, body, true)
 }
+
+// SendPasswordResetEmail sends a single-use password reset link.
+func (c *SMTPClient) SendPasswordResetEmail(to, resetURL string) error {
+	subject := "Reset your RevieU password"
+	body := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h2>Reset your RevieU password</h2>
+    <p>Click the link below to choose a new password:</p>
+    <p><a href="%s">Reset password</a></p>
+    <p>Or copy and paste this URL into your browser:</p>
+    <p>%s</p>
+    <p>This link will expire in one hour and can only be used once.</p>
+    <br>
+    <p>If you did not request a password reset, you can ignore this email.</p>
+</body>
+</html>
+`, resetURL, resetURL)
+
+	return c.SendEmailHTML(to, subject, body, true)
+}

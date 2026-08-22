@@ -480,6 +480,17 @@ definitions:
       user_id:
         type: integer
     type: object
+  internal_domain_auth.ResetPasswordRequest:
+    properties:
+      password:
+        minLength: 6
+        type: string
+      token:
+        type: string
+    required:
+    - password
+    - token
+    type: object
   internal_domain_auth.UserInfoResponse:
     properties:
       email: {}
@@ -933,6 +944,36 @@ paths:
               type: string
             type: object
       summary: Register a new user
+      tags:
+      - auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Consumes a single-use password reset token and updates the password
+      parameters:
+      - description: Reset Password Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_domain_auth.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset password with a token
       tags:
       - auth
   /auth/verify:

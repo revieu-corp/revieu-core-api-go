@@ -2,9 +2,14 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
@@ -14,6 +19,7 @@ import (
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/email"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/logger"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Service exposes auth operations used by handlers.
@@ -23,6 +29,8 @@ type Service interface {
 	RefreshAccessToken(ctx context.Context, refreshToken string) (LoginTokens, error)
 	LoginOrRegisterOAuthUser(ctx context.Context, email, name, provider, avatar string) (string, error)
 	VerifyEmail(ctx context.Context, token string) error
+	RequestPasswordReset(ctx context.Context, email, baseURL string) error
+	ResetPassword(ctx context.Context, rawToken, password string) error
 }
 
 // LoginTokens contains the access and refresh token pair.
@@ -31,10 +39,24 @@ type LoginTokens struct {
 	RefreshToken string
 }
 
+const (
+	passwordResetTokenTTL       = time.Hour
+	passwordResetWindow         = 15 * time.Minute
+	passwordResetMaxRequests    = 3
+	passwordResetTokenByteCount = 32
+)
+
+var errInvalidPasswordResetToken = errors.New("invalid or expired password reset token")
+
+type mailer interface {
+	SendVerificationEmail(to, verifyURL string) error
+	SendPasswordResetEmail(to, resetURL string) error
+}
+
 type service struct {
 	db           *gorm.DB
 	tokenService *token.Service
-	emailClient  *email.SMTPClient
+	emailClient  mailer
 }
 
 // NewService creates an auth service.
@@ -42,7 +64,7 @@ func NewService(db *gorm.DB, jwtCfg config.JWTConfig, smtpCfg config.SMTPConfig)
 	if db == nil {
 		db = database.DB
 	}
-	var emailClient *email.SMTPClient
+	var emailClient mailer
 	if smtpCfg.Host != "" && smtpCfg.Port != 0 {
 		emailClient = email.NewSMTPClient(smtpCfg)
 	}
@@ -133,6 +155,168 @@ func (s *service) Register(ctx context.Context, username, userEmail, password, b
 	}
 
 	return &user, nil
+}
+
+// RequestPasswordReset creates a short-lived, single-use reset token and
+// delivers it by email. It intentionally returns success for an unknown
+// address so callers cannot enumerate accounts.
+func (s *service) RequestPasswordReset(ctx context.Context, userEmail, baseURL string) error {
+	userEmail = strings.TrimSpace(userEmail)
+	var auth model.UserAuth
+	if err := s.db.Where("identity_type = ? AND identifier = ?", "email", userEmail).First(&auth).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			logger.Info(ctx, "Password reset requested for unknown account",
+				"event", "password_reset_requested",
+				"account_found", false,
+			)
+			return nil
+		}
+		return fmt.Errorf("find password reset account: %w", err)
+	}
+
+	// Keep the location carried by the database driver for the rate-limit
+	// comparison. PostgreSQL normalizes TIMESTAMPTZ values, while SQLite's
+	// test driver stores time.Time values with their location in text form.
+	now := time.Now()
+	var recentRequests int64
+	if err := s.db.Model(&model.PasswordResetToken{}).
+		Where("user_id = ? AND created_at >= ?", auth.UserID, now.Add(-passwordResetWindow)).
+		Count(&recentRequests).Error; err != nil {
+		return fmt.Errorf("check password reset rate limit: %w", err)
+	}
+	if recentRequests >= passwordResetMaxRequests {
+		logger.Warn(ctx, "Password reset rate limit reached",
+			"event", "password_reset_rate_limited",
+			"user_id", auth.UserID,
+		)
+		return nil
+	}
+
+	rawToken, err := newPasswordResetToken()
+	if err != nil {
+		return fmt.Errorf("generate password reset token: %w", err)
+	}
+	reset := model.PasswordResetToken{
+		UserID:    auth.UserID,
+		TokenHash: token.HashToken(rawToken),
+		ExpiresAt: now.Add(passwordResetTokenTTL),
+	}
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// A new request invalidates any older outstanding link for the same
+		// account, leaving only the most recently issued token usable.
+		if err := tx.Model(&model.PasswordResetToken{}).
+			Where("user_id = ? AND used_at IS NULL", auth.UserID).
+			Update("used_at", now).Error; err != nil {
+			return err
+		}
+		return tx.Create(&reset).Error
+	}); err != nil {
+		return fmt.Errorf("persist password reset token: %w", err)
+	}
+
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		baseURL = "http://localhost:3000"
+	}
+	resetURL := fmt.Sprintf("%s/auth/reset-password?token=%s", baseURL, url.QueryEscape(rawToken))
+	if s.emailClient == nil {
+		logger.Warn(ctx, "SMTP not configured; password reset email not sent",
+			"event", "password_reset_email_skipped",
+			"user_id", auth.UserID,
+		)
+		return nil
+	}
+	if err := s.emailClient.SendPasswordResetEmail(userEmail, resetURL); err != nil {
+		// Keep the endpoint's anti-enumeration response stable even when the
+		// mail provider is unavailable. The event remains observable in logs.
+		logger.Warn(ctx, "Failed to send password reset email",
+			"event", "password_reset_email_failed",
+			"user_id", auth.UserID,
+			"error", err.Error(),
+		)
+		return nil
+	}
+
+	logger.Info(ctx, "Password reset email sent",
+		"event", "password_reset_email_sent",
+		"user_id", auth.UserID,
+	)
+	return nil
+}
+
+// ResetPassword validates and consumes a password reset token, updates the
+// email credential, and revokes existing refresh sessions for the account.
+func (s *service) ResetPassword(ctx context.Context, rawToken, password string) error {
+	if strings.TrimSpace(rawToken) == "" || utf8.RuneCountInString(password) < 6 {
+		return errInvalidPasswordResetToken
+	}
+
+	now := time.Now().UTC()
+	tokenHash := token.HashToken(rawToken)
+	var userID int64
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var reset model.PasswordResetToken
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("token_hash = ? AND used_at IS NULL", tokenHash).
+			First(&reset).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return errInvalidPasswordResetToken
+			}
+			return err
+		}
+		if reset.IsExpired() {
+			return errInvalidPasswordResetToken
+		}
+
+		var auth model.UserAuth
+		if err := tx.Where("user_id = ? AND identity_type = ?", reset.UserID, "email").First(&auth).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return errInvalidPasswordResetToken
+			}
+			return err
+		}
+		if err := auth.SetPassword(password); err != nil {
+			return err
+		}
+		if err := tx.Model(&model.UserAuth{}).Where("id = ?", auth.ID).Update("credential", auth.Credential).Error; err != nil {
+			return err
+		}
+		if result := tx.Model(&model.PasswordResetToken{}).
+			Where("id = ? AND used_at IS NULL", reset.ID).
+			Update("used_at", now); result.Error != nil {
+			return result.Error
+		} else if result.RowsAffected != 1 {
+			return errInvalidPasswordResetToken
+		}
+		if err := tx.Model(&model.RefreshToken{}).
+			Where("user_id = ? AND revoked_at IS NULL", reset.UserID).
+			Updates(map[string]interface{}{"revoked_at": now, "last_used_at": now, "updated_at": now}).Error; err != nil {
+			return err
+		}
+		userID = reset.UserID
+		return nil
+	})
+	if err != nil {
+		logger.Warn(ctx, "Password reset failed",
+			"event", "password_reset_failed",
+			"error", err.Error(),
+		)
+		return err
+	}
+
+	logger.Info(ctx, "Password reset completed",
+		"event", "password_reset_completed",
+		"user_id", userID,
+	)
+	return nil
+}
+
+func newPasswordResetToken() (string, error) {
+	raw := make([]byte, passwordResetTokenByteCount)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
 }
 
 func (s *service) Login(ctx context.Context, email, password, ipAddress string) (LoginTokens, error) {

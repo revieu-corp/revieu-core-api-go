@@ -40,6 +40,14 @@ func (s stubAuthService) VerifyEmail(context.Context, string) error {
 	return errors.New("not implemented")
 }
 
+func (s stubAuthService) RequestPasswordReset(context.Context, string, string) error {
+	return errors.New("not implemented")
+}
+
+func (s stubAuthService) ResetPassword(context.Context, string, string) error {
+	return errors.New("not implemented")
+}
+
 func TestRefreshHandlerSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := &Handler{

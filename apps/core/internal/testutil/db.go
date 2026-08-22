@@ -22,6 +22,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&model.UserAuth{},
 		&model.UserProfile{},
 		&model.EmailVerification{},
+		&model.PasswordResetToken{},
 		&model.RefreshToken{},
 		&model.Merchant{},
 		&model.Store{},
