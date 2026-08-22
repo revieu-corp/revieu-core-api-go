@@ -6,13 +6,19 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/store/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/store/service"
-	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 )
 
 type StoreHandler struct {
 	svc *service.StoreService
+}
+
+type storeReviewResponse struct {
+	model.Review
+	Tags []string `json:"tags"`
 }
 
 func NewStoreHandler(svc *service.StoreService) *StoreHandler {
@@ -114,7 +120,22 @@ func (h *StoreHandler) Reviews(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load reviews"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": reviews, "cursor": cursor})
+	response := make([]storeReviewResponse, 0, len(reviews))
+	for _, review := range reviews {
+		response = append(response, storeReviewResponse{
+			Review: review,
+			Tags:   tagNames(review.Tags),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": response, "cursor": cursor})
+}
+
+func tagNames(tags []model.Tag) []string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return names
 }
 
 // StoreHours godoc

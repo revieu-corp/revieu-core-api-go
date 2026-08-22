@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/service"
-	"github.com/gin-gonic/gin"
 )
 
 type ReviewHandler struct {
@@ -53,20 +53,21 @@ func (h *ReviewHandler) ListUserReviews(c *gin.Context) {
 			merchantValue = *merchant
 		}
 		items = append(items, dto.ReviewItem{
-			ID:            review.ID,
-			Rating:        review.Rating,
-			RatingEnv:     review.RatingEnv,
-			RatingService: review.RatingService,
-			RatingValue:   review.RatingValue,
-			Content:       review.Content,
-			Images:        parseJSONStrings(review.Images),
-			AvgCost:       review.AvgCost,
-			LikeCount:     review.LikeCount,
-			CommentCount:  review.CommentCount,
-			IsLiked:       liked[review.ID],
-			Merchant:      merchantValue,
-			Tags:          []string{},
-			CreatedAt:     review.CreatedAt,
+			ID:               review.ID,
+			Rating:           review.Rating,
+			RatingEnv:        review.RatingEnv,
+			RatingService:    review.RatingService,
+			RatingValue:      review.RatingValue,
+			Content:          review.Content,
+			Images:           parseJSONStrings(review.Images),
+			AvgCost:          review.AvgCost,
+			LikeCount:        review.LikeCount,
+			CommentCount:     review.CommentCount,
+			LocationVerified: review.LocationVerified,
+			IsLiked:          liked[review.ID],
+			Merchant:         merchantValue,
+			Tags:             tagNames(review.Tags),
+			CreatedAt:        review.CreatedAt,
 		})
 	}
 	c.JSON(http.StatusOK, dto.ReviewListResponse{Reviews: items, Total: int(total), Cursor: nextCursor})
@@ -100,20 +101,21 @@ func (h *ReviewHandler) ListMyReviews(c *gin.Context) {
 			merchantValue = *merchant
 		}
 		items = append(items, dto.ReviewItem{
-			ID:            review.ID,
-			Rating:        review.Rating,
-			RatingEnv:     review.RatingEnv,
-			RatingService: review.RatingService,
-			RatingValue:   review.RatingValue,
-			Content:       review.Content,
-			Images:        parseJSONStrings(review.Images),
-			AvgCost:       review.AvgCost,
-			LikeCount:     review.LikeCount,
-			CommentCount:  review.CommentCount,
-			IsLiked:       liked[review.ID],
-			Merchant:      merchantValue,
-			Tags:          []string{},
-			CreatedAt:     review.CreatedAt,
+			ID:               review.ID,
+			Rating:           review.Rating,
+			RatingEnv:        review.RatingEnv,
+			RatingService:    review.RatingService,
+			RatingValue:      review.RatingValue,
+			Content:          review.Content,
+			Images:           parseJSONStrings(review.Images),
+			AvgCost:          review.AvgCost,
+			LikeCount:        review.LikeCount,
+			CommentCount:     review.CommentCount,
+			LocationVerified: review.LocationVerified,
+			IsLiked:          liked[review.ID],
+			Merchant:         merchantValue,
+			Tags:             tagNames(review.Tags),
+			CreatedAt:        review.CreatedAt,
 		})
 	}
 	c.JSON(http.StatusOK, dto.ReviewListResponse{Reviews: items, Total: int(total), Cursor: nextCursor})

@@ -47,7 +47,7 @@ func (s *ContentService) ListUserReviews(ctx context.Context, userID int64, curs
 		q = q.Where("id < ?", *cursor)
 	}
 	var reviews []model.Review
-	if err := q.Limit(limit + 1).Find(&reviews).Error; err != nil {
+	if err := q.Preload("Tags").Limit(limit + 1).Find(&reviews).Error; err != nil {
 		return nil, 0, nil, err
 	}
 	var nextCursor *int64

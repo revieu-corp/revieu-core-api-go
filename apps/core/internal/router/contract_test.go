@@ -11,13 +11,12 @@ import (
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 )
 
-// routeContract pins the full public surface: every method+path, and whether
-// the route rejects an anonymous caller. Refactors that move a route between
-// domains are free; refactors that change a path or drop an auth check fail.
+// routeContract pins the full public surface: every method+path. Refactors
+// that move a route between domains are free; refactors that change a path
+// fail.
 type routeContract struct {
-	method   string
-	path     string
-	requires bool // requires authentication
+	method string
+	path   string
 }
 
 func contractCfg() *config.Config {

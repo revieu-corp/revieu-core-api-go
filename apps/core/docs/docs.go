@@ -5260,10 +5260,25 @@ const docTemplate = `{
                 "location": {
                     "type": "string"
                 },
+                "locationVerified": {
+                    "type": "boolean"
+                },
                 "merchantId": {
                     "type": "string"
                 },
                 "rating": {
+                    "type": "number"
+                },
+                "ratingEnv": {
+                    "type": "number"
+                },
+                "ratingFood": {
+                    "type": "number"
+                },
+                "ratingService": {
+                    "type": "number"
+                },
+                "ratingValue": {
                     "type": "number"
                 },
                 "storeId": {

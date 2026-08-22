@@ -39,6 +39,34 @@ func TestCreateReviewMerchantMustExist(t *testing.T) {
 	}
 }
 
+func TestCreateReviewRejectsRatingsOutsideRange(t *testing.T) {
+	svc, db, userID := setupReviewServiceTest(t)
+	merchant := model.Merchant{Name: "Cafe"}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+
+	for _, rating := range []float64{0, 5.5} {
+		_, err := svc.Create(context.Background(), userID, dto.Review{
+			MerchantID: fmt.Sprintf("%d", merchant.ID),
+			Rating:     rating,
+		})
+		if err == nil {
+			t.Fatalf("expected rating %.1f to be rejected", rating)
+		}
+	}
+
+	detailRating := 6.0
+	_, err := svc.Create(context.Background(), userID, dto.Review{
+		MerchantID:    fmt.Sprintf("%d", merchant.ID),
+		Rating:        4,
+		RatingService: &detailRating,
+	})
+	if err == nil {
+		t.Fatalf("expected out-of-range detail rating to be rejected")
+	}
+}
+
 func TestCreateReviewStoreMustExist(t *testing.T) {
 	svc, db, userID := setupReviewServiceTest(t)
 
@@ -175,6 +203,70 @@ func TestCreateReviewSyncsStoreAndMerchantAggregates(t *testing.T) {
 	}
 	if refreshedMerchant.AvgRating != float32(3.0) {
 		t.Fatalf("unexpected merchant avg_rating: got %.2f want 3.00", refreshedMerchant.AvgRating)
+	}
+}
+
+func TestCreateReviewPersistsDetailRatingsAndTags(t *testing.T) {
+	svc, db, userID := setupReviewServiceTest(t)
+	merchant := model.Merchant{Name: "Cafe"}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+	environment := 4.0
+	serviceRating := 3.5
+	value := 4.5
+	food := 5.0
+
+	created, err := svc.Create(context.Background(), userID, dto.Review{
+		MerchantID:       fmt.Sprintf("%d", merchant.ID),
+		Rating:           4.5,
+		RatingEnv:        &environment,
+		RatingService:    &serviceRating,
+		RatingValue:      &value,
+		RatingFood:       &food,
+		LocationVerified: true,
+		Tags:             []string{"#fresh", "quick", "#fresh"},
+		Text:             "great",
+	})
+	if err != nil {
+		t.Fatalf("create review failed: %v", err)
+	}
+	if created.RatingEnv == nil || *created.RatingEnv != float32(environment) {
+		t.Fatalf("created review did not retain environment rating")
+	}
+	if len(created.Tags) != 2 {
+		t.Fatalf("expected two normalized tags on created review, got %d", len(created.Tags))
+	}
+
+	var persisted model.Review
+	if err := db.Preload("Tags").First(&persisted, created.ID).Error; err != nil {
+		t.Fatalf("failed to reload review: %v", err)
+	}
+	if persisted.RatingService == nil || *persisted.RatingService != float32(serviceRating) {
+		t.Fatalf("service rating was not persisted")
+	}
+	if persisted.RatingValue == nil || *persisted.RatingValue != float32(value) {
+		t.Fatalf("value rating was not persisted")
+	}
+	if persisted.RatingFood == nil || *persisted.RatingFood != float32(food) {
+		t.Fatalf("food rating was not persisted")
+	}
+	if !persisted.LocationVerified {
+		t.Fatalf("location verification was not persisted")
+	}
+	if len(persisted.Tags) != 2 || persisted.Tags[0].Name != "#fresh" || persisted.Tags[1].Name != "quick" {
+		t.Fatalf("unexpected persisted tags: %#v", persisted.Tags)
+	}
+
+	response := dto.FromModel(persisted)
+	if response.RatingEnv == nil || *response.RatingEnv != environment {
+		t.Fatalf("environment rating missing from response")
+	}
+	if !response.LocationVerified {
+		t.Fatalf("location verification missing from response")
+	}
+	if len(response.Tags) != 2 || response.Tags[0] != "#fresh" || response.Tags[1] != "quick" {
+		t.Fatalf("unexpected response tags: %#v", response.Tags)
 	}
 }
 

@@ -10,21 +10,26 @@ import (
 )
 
 type Review struct {
-	ID            string   `json:"id"`
-	MerchantID    string   `json:"merchantId"`
-	VenueID       string   `json:"venueId"`
-	StoreID       string   `json:"storeId"`
-	UserID        string   `json:"userId"`
-	Rating        float64  `json:"rating"`
-	Text          string   `json:"text"`
-	Images        []string `json:"images"`
-	Tags          []string `json:"tags"`
-	VisitDate     string   `json:"visitDate"`
-	CreatedAt     string   `json:"createdAt"`
-	BusinessName  string   `json:"businessName"`
-	BusinessImage string   `json:"businessImage"`
-	Location      string   `json:"location"`
-	LikeCount     int      `json:"likeCount"`
+	ID               string   `json:"id"`
+	MerchantID       string   `json:"merchantId"`
+	VenueID          string   `json:"venueId"`
+	StoreID          string   `json:"storeId"`
+	UserID           string   `json:"userId"`
+	Rating           float64  `json:"rating"`
+	RatingEnv        *float64 `json:"ratingEnv,omitempty"`
+	RatingService    *float64 `json:"ratingService,omitempty"`
+	RatingValue      *float64 `json:"ratingValue,omitempty"`
+	RatingFood       *float64 `json:"ratingFood,omitempty"`
+	LocationVerified bool     `json:"locationVerified"`
+	Text             string   `json:"text"`
+	Images           []string `json:"images"`
+	Tags             []string `json:"tags"`
+	VisitDate        string   `json:"visitDate"`
+	CreatedAt        string   `json:"createdAt"`
+	BusinessName     string   `json:"businessName"`
+	BusinessImage    string   `json:"businessImage"`
+	Location         string   `json:"location"`
+	LikeCount        int      `json:"likeCount"`
 }
 
 // CommentRequest is the request body for adding a review comment.
@@ -89,22 +94,43 @@ func FromModel(m model.Review) Review {
 	}
 
 	return Review{
-		ID:            strconv.FormatInt(m.ID, 10),
-		MerchantID:    strconv.FormatInt(m.MerchantID, 10),
-		VenueID:       strconv.FormatInt(m.VenueID, 10),
-		StoreID:       storeID,
-		UserID:        strconv.FormatInt(m.UserID, 10),
-		Rating:        float64(m.Rating),
-		Text:          m.Content,
-		Images:        images,
-		Tags:          []string{},
-		VisitDate:     m.VisitDate.Format("2006-01-02"),
-		CreatedAt:     m.CreatedAt.Format(time.RFC3339),
-		BusinessName:  businessName,
-		BusinessImage: businessImage,
-		Location:      location,
-		LikeCount:     m.LikeCount,
+		ID:               strconv.FormatInt(m.ID, 10),
+		MerchantID:       strconv.FormatInt(m.MerchantID, 10),
+		VenueID:          strconv.FormatInt(m.VenueID, 10),
+		StoreID:          storeID,
+		UserID:           strconv.FormatInt(m.UserID, 10),
+		Rating:           float64(m.Rating),
+		RatingEnv:        float32ToFloat64(m.RatingEnv),
+		RatingService:    float32ToFloat64(m.RatingService),
+		RatingValue:      float32ToFloat64(m.RatingValue),
+		RatingFood:       float32ToFloat64(m.RatingFood),
+		LocationVerified: m.LocationVerified,
+		Text:             m.Content,
+		Images:           images,
+		Tags:             tagNames(m.Tags),
+		VisitDate:        m.VisitDate.Format("2006-01-02"),
+		CreatedAt:        m.CreatedAt.Format(time.RFC3339),
+		BusinessName:     businessName,
+		BusinessImage:    businessImage,
+		Location:         location,
+		LikeCount:        m.LikeCount,
 	}
+}
+
+func float32ToFloat64(value *float32) *float64 {
+	if value == nil {
+		return nil
+	}
+	converted := float64(*value)
+	return &converted
+}
+
+func tagNames(tags []model.Tag) []string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return names
 }
 
 func FromModels(items []model.Review) []Review {

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -72,6 +72,14 @@ func parseJSONStrings(raw string) []string {
 		return []string{}
 	}
 	return values
+}
+
+func tagNames(tags []model.Tag) []string {
+	names := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		names = append(names, tag.Name)
+	}
+	return names
 }
 
 func nextCursor[T any](items []T) *int64 {

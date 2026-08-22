@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/testutil"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/token"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/gin-gonic/gin"
 )
 
 func setupAPITest(t *testing.T) (*gin.Engine, string) {
@@ -845,7 +845,7 @@ func TestReviewsCreateAndDetail(t *testing.T) {
 	m := model.Merchant{Name: "Cafe"}
 	_ = db.Create(&m).Error
 
-	body := strings.NewReader(fmt.Sprintf(`{"merchantId":"%d","rating":4.5,"text":"nice"}`, m.ID))
+	body := strings.NewReader(fmt.Sprintf(`{"merchantId":"%d","rating":4.5,"ratingEnv":4,"ratingFood":5,"locationVerified":true,"tags":["#fresh","quick"],"text":"nice"}`, m.ID))
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/reviews", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -854,6 +854,47 @@ func TestReviewsCreateAndDetail(t *testing.T) {
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var response struct {
+		RatingEnv        *float64 `json:"ratingEnv"`
+		RatingFood       *float64 `json:"ratingFood"`
+		LocationVerified bool     `json:"locationVerified"`
+		Tags             []string `json:"tags"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode create response: %v", err)
+	}
+	if response.RatingEnv == nil || *response.RatingEnv != 4 {
+		t.Fatalf("expected environment rating in response, got %#v", response.RatingEnv)
+	}
+	if response.RatingFood == nil || *response.RatingFood != 5 {
+		t.Fatalf("expected food rating in response, got %#v", response.RatingFood)
+	}
+	if !response.LocationVerified {
+		t.Fatalf("expected location verification in response")
+	}
+	if len(response.Tags) != 2 || response.Tags[0] != "#fresh" || response.Tags[1] != "quick" {
+		t.Fatalf("expected persisted tags in response, got %#v", response.Tags)
+	}
+}
+
+func TestReviewsCreateRejectsOutOfRangeRating(t *testing.T) {
+	r, tok := setupAPITest(t)
+	db := database.DB
+	merchant := model.Merchant{Name: "Cafe"}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+
+	body := strings.NewReader(fmt.Sprintf(`{"merchantId":"%d","rating":6,"text":"invalid"}`, merchant.ID))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/reviews", body)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
