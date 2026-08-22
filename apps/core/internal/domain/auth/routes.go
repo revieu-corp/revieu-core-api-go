@@ -17,6 +17,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 		authPublic.POST("/register", handler.Register)
 		authPublic.POST("/login", handler.Login)
 		authPublic.POST("/refresh", handler.Refresh)
+		authPublic.POST("/logout", handler.Logout)
 		authPublic.POST("/forgot-password", handler.ForgotPassword)
 		authPublic.GET("/login/google", handler.GoogleLogin)
 		authPublic.GET("/callback/google", handler.GoogleCallback)

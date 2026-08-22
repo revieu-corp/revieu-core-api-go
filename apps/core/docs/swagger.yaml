@@ -837,6 +837,15 @@ paths:
       summary: Redirect to Google OAuth
       tags:
       - auth
+  /auth/logout:
+    post:
+      description: Clears the HttpOnly OAuth access-token cookie
+      responses:
+        "204":
+          description: No Content
+      summary: Clear the current browser session
+      tags:
+      - auth
   /auth/me:
     get:
       description: Get the current authenticated user's information (protected route)

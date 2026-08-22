@@ -458,6 +458,20 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/logout": {
+            "post": {
+                "description": "Clears the HttpOnly OAuth access-token cookie",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Clear the current browser session",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/auth/me": {
             "get": {
                 "security": [

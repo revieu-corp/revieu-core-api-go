@@ -341,3 +341,33 @@ func TestRefreshAccessTokenRejectsRevokedToken(t *testing.T) {
 		t.Fatal("expected old refresh token to be rejected after rotation")
 	}
 }
+
+func TestRefreshAccessTokenRejectsInactiveUser(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	authService := NewService(db, testJWTConfig, testSMTPConfig)
+
+	ctx := context.Background()
+	user, err := authService.Register(ctx, "inactive-refresh", "inactive-refresh@example.com", "securepass", "http://localhost")
+	if err != nil {
+		t.Fatalf("register failed: %v", err)
+	}
+	var verification model.EmailVerification
+	if err := db.Where("user_id = ?", user.ID).First(&verification).Error; err != nil {
+		t.Fatalf("find verification: %v", err)
+	}
+	if err := authService.VerifyEmail(ctx, verification.Token); err != nil {
+		t.Fatalf("verify email: %v", err)
+	}
+
+	tokens, err := authService.Login(ctx, "inactive-refresh@example.com", "securepass", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if err := db.Model(&model.User{}).Where("id = ?", user.ID).Update("status", 1).Error; err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+
+	if _, err := authService.RefreshAccessToken(ctx, tokens.RefreshToken); err == nil {
+		t.Fatal("expected disabled user refresh to be rejected")
+	}
+}

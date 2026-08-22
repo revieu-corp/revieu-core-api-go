@@ -1,31 +1,141 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/authorization"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/logger"
-	"github.com/gin-gonic/gin"
+)
+
+const (
+	oauthStateCookieName = "revieu_oauth_state"
+	oauthStateMaxAge     = 10 * 60
 )
 
 type Handler struct {
-	svc         Service
-	oauthCfg    config.OAuthConfig
-	frontendURL string
-	apiBasePath string
+	svc           Service
+	oauthCfg      config.OAuthConfig
+	frontendURL   string
+	apiBasePath   string
+	jwtExpireHour int
 }
 
 func NewHandler(jwtCfg config.JWTConfig, oauthCfg config.OAuthConfig, smtpCfg config.SMTPConfig, frontendURL string, apiBasePath string) *Handler {
 	return &Handler{
-		svc:         NewService(nil, jwtCfg, smtpCfg),
-		oauthCfg:    oauthCfg,
-		frontendURL: frontendURL,
-		apiBasePath: apiBasePath,
+		svc:           NewService(nil, jwtCfg, smtpCfg),
+		oauthCfg:      oauthCfg,
+		frontendURL:   frontendURL,
+		apiBasePath:   apiBasePath,
+		jwtExpireHour: jwtCfg.ExpireHour,
 	}
+}
+
+func (h *Handler) frontendRedirectURL() string {
+	configured := strings.TrimRight(strings.TrimSpace(h.frontendURL), "/")
+	if parsed, err := url.Parse(configured); err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+		return configured
+	}
+	return "http://localhost:3000"
+}
+
+func (h *Handler) authCookiePath() string {
+	base := strings.TrimRight(strings.TrimSpace(h.apiBasePath), "/")
+	if base == "" {
+		return "/auth"
+	}
+	return base + "/auth"
+}
+
+func (h *Handler) apiCookiePath() string {
+	base := strings.TrimRight(strings.TrimSpace(h.apiBasePath), "/")
+	if base == "" {
+		return "/"
+	}
+	return base
+}
+
+func (h *Handler) secureCookie(c *gin.Context) bool {
+	return h.requestScheme(c) == "https"
+}
+
+func newOAuthState() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
+}
+
+func (h *Handler) setOAuthStateCookie(c *gin.Context, state string) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    state,
+		Path:     h.authCookiePath(),
+		MaxAge:   oauthStateMaxAge,
+		HttpOnly: true,
+		Secure:   h.secureCookie(c),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *Handler) clearOAuthStateCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     oauthStateCookieName,
+		Value:    "",
+		Path:     h.authCookiePath(),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.secureCookie(c),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *Handler) consumeOAuthState(c *gin.Context) (string, error) {
+	state := c.Query("state")
+	cookie, err := c.Request.Cookie(oauthStateCookieName)
+	h.clearOAuthStateCookie(c)
+	if err != nil || state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(cookie.Value)) != 1 {
+		return "", fmt.Errorf("invalid oauth state")
+	}
+	return h.frontendRedirectURL(), nil
+}
+
+func (h *Handler) setAccessTokenCookie(c *gin.Context, accessToken string) {
+	maxAge := h.jwtExpireHour * 60 * 60
+	if maxAge <= 0 {
+		maxAge = 60 * 60
+	}
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     authorization.AccessTokenCookieName,
+		Value:    accessToken,
+		Path:     h.apiCookiePath(),
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   h.secureCookie(c),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func (h *Handler) clearAccessTokenCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     authorization.AccessTokenCookieName,
+		Value:    "",
+		Path:     h.apiCookiePath(),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.secureCookie(c),
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // requestScheme returns the external protocol for building OAuth
@@ -144,30 +254,23 @@ func (h *Handler) GoogleLogin(c *gin.Context) {
 		return
 	}
 
-	frontendURL := h.frontendURL
-	if frontendURL == "" {
-		if referer := c.GetHeader("Referer"); referer != "" {
-			if parsedURL, err := url.Parse(referer); err == nil {
-				frontendURL = fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
-			}
-		} else if origin := c.GetHeader("Origin"); origin != "" {
-			frontendURL = origin
-		} else {
-			frontendURL = "http://localhost:3000"
-		}
-	}
-
 	redirectURI := h.googleRedirectURI(c)
+	state, err := newOAuthState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize OAuth state"})
+		return
+	}
+	h.setOAuthStateCookie(c, state)
 
-	state := url.QueryEscape(frontendURL)
-
-	authURL := fmt.Sprintf(
-		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&access_type=offline&state=%s",
-		url.QueryEscape(clientID),
-		url.QueryEscape(redirectURI),
-		url.QueryEscape("openid email profile"),
-		state,
-	)
+	params := url.Values{
+		"client_id":     {clientID},
+		"redirect_uri":  {redirectURI},
+		"response_type": {"code"},
+		"scope":         {"openid email profile"},
+		"access_type":   {"offline"},
+		"state":         {state},
+	}
+	authURL := "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
 
 	c.Redirect(http.StatusFound, authURL)
 }
@@ -188,18 +291,10 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	state := c.Query("state")
-	var frontendURL string
-	if state != "" {
-		if decodedURL, err := url.QueryUnescape(state); err == nil && decodedURL != "" {
-			frontendURL = decodedURL
-		}
-	}
-	if frontendURL == "" {
-		frontendURL = h.frontendURL
-	}
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
+	frontendURL, err := h.consumeOAuthState(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid OAuth state"})
+		return
 	}
 
 	redirectURI := h.googleRedirectURI(c)
@@ -286,8 +381,20 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		return
 	}
 
-	redirectURL := fmt.Sprintf("%s/auth/callback?token=%s", frontendURL, url.QueryEscape(token))
+	h.setAccessTokenCookie(c, token)
+	redirectURL := fmt.Sprintf("%s/auth/callback", frontendURL)
 	c.Redirect(http.StatusFound, redirectURL)
+}
+
+// Logout godoc
+// @Summary Clear the current browser session
+// @Description Clears the HttpOnly OAuth access-token cookie
+// @Tags auth
+// @Success 204
+// @Router /auth/logout [post]
+func (h *Handler) Logout(c *gin.Context) {
+	h.clearAccessTokenCookie(c)
+	c.JSON(http.StatusNoContent, nil)
 }
 
 // ForgotPassword godoc
