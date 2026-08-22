@@ -1020,7 +1020,84 @@ paths:
       summary: Create conversation
       tags:
       - conversation
+  /conversations/{id}:
+    delete:
+      description: Removes the authenticated user's membership from a conversation
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a conversation for the current user
+      tags:
+      - conversation
   /conversations/{id}/messages:
+    delete:
+      description: Deletes all messages from a conversation after participant authorization
+      parameters:
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Clear conversation messages
+      tags:
+      - conversation
     get:
       description: Returns messages for a conversation
       parameters:

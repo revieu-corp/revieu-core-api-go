@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type ConversationSummary struct {
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 	UnreadCount   int64      `json:"unread_count"`
 	IsMuted       bool       `json:"is_muted"`
+	IsPinned      bool       `json:"is_pinned"`
 }
 
 type ConversationMessage struct {
@@ -50,7 +52,8 @@ type SendMessageInput struct {
 }
 
 type UpdateConversationSettingsInput struct {
-	IsMuted *bool `json:"is_muted"`
+	IsMuted  *bool `json:"is_muted"`
+	IsPinned *bool `json:"is_pinned"`
 }
 
 var ErrConversationNotFound = errors.New("conversation not found")
@@ -100,8 +103,47 @@ func (s *ConversationService) List(ctx context.Context, userID int64) ([]Convers
 		}
 		summaries = append(summaries, summary)
 	}
+	sort.SliceStable(summaries, func(i, j int) bool {
+		return summaries[i].IsPinned && !summaries[j].IsPinned
+	})
 
 	return summaries, nil
+}
+
+// Delete removes the current user's membership from a conversation. Other
+// participants retain their own view of the conversation.
+func (s *ConversationService) Delete(ctx context.Context, userID, conversationID int64) error {
+	membership, err := s.membershipForUser(ctx, userID, conversationID)
+	if err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("id = ? AND user_id = ? AND conversation_id = ?", membership.ID, userID, conversationID).
+			Delete(&model.ConversationParticipant{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrConversationForbidden
+		}
+		return nil
+	})
+}
+
+// ClearMessages permanently removes all messages from a conversation after
+// verifying that the caller is a participant.
+func (s *ConversationService) ClearMessages(ctx context.Context, userID, conversationID int64) error {
+	if _, err := s.membershipForUser(ctx, userID, conversationID); err != nil {
+		return err
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("conversation_id = ?", conversationID).Delete(&model.Message{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.Conversation{}).
+			Where("id = ?", conversationID).
+			Update("updated_at", time.Now().UTC()).Error
+	})
 }
 
 func (s *ConversationService) Create(ctx context.Context, userID int64, input CreateConversationInput) (*ConversationSummary, error) {
@@ -246,6 +288,12 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, userID, conver
 			return nil, err
 		}
 	}
+	if input.IsPinned != nil {
+		membership.IsPinned = *input.IsPinned
+		if err := s.db.WithContext(ctx).Model(&membership).Update("is_pinned", membership.IsPinned).Error; err != nil {
+			return nil, err
+		}
+	}
 
 	var conversation model.Conversation
 	if err := s.db.WithContext(ctx).
@@ -313,6 +361,7 @@ func (s *ConversationService) buildConversationSummary(
 		Title:       conversation.Title,
 		UnreadCount: unreadCount,
 		IsMuted:     membership.IsMuted,
+		IsPinned:    membership.IsPinned,
 	}
 
 	if len(conversation.Messages) > 0 {

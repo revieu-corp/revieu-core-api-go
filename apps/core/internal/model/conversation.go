@@ -10,7 +10,7 @@ type Conversation struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	Participants []ConversationParticipant `gorm:"foreignKey:ConversationID" json:"participants,omitempty"`
-	Messages     []Message                `gorm:"foreignKey:ConversationID" json:"messages,omitempty"`
+	Messages     []Message                 `gorm:"foreignKey:ConversationID" json:"messages,omitempty"`
 }
 
 func (c *Conversation) TableName() string { return "conversations" }
@@ -21,6 +21,7 @@ type ConversationParticipant struct {
 	UserID         int64     `gorm:"not null;index" json:"user_id"`
 	Role           string    `gorm:"type:varchar(20);default:'member'" json:"role"`
 	IsMuted        bool      `gorm:"default:false" json:"is_muted"`
+	IsPinned       bool      `gorm:"default:false" json:"is_pinned"`
 	LastReadAt     time.Time `json:"last_read_at"`
 	JoinedAt       time.Time `json:"joined_at"`
 

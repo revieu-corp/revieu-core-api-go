@@ -17,8 +17,10 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	{
 		convos.GET("", h.List)
 		convos.POST("", h.Create)
+		convos.DELETE("/:id", h.Delete)
 		convos.GET("/:id/messages", h.Messages)
 		convos.POST("/:id/messages", h.SendMessage)
+		convos.DELETE("/:id/messages", h.ClearMessages)
 		convos.PATCH("/:id/settings", h.UpdateSettings)
 	}
 }
