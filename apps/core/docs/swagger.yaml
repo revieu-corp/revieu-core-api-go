@@ -490,11 +490,25 @@ definitions:
     type: object
   internal_domain_coupon_handler.CreateStoreCouponRequest:
     properties:
+      coupon_type:
+        type: string
       description:
+        type: string
+      discount_percentage:
+        type: number
+      dish_ids:
+        items:
+          type: integer
+        type: array
+      image_url:
         type: string
       max_per_user:
         type: integer
+      original_price:
+        type: number
       price:
+        type: number
+      sale_price:
         type: number
       status:
         type: string
@@ -1319,6 +1333,68 @@ paths:
       summary: Create media upload
       tags:
       - media
+  /merchant/dishes:
+    get:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: List my dishes
+      tags:
+      - dish
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Create dish
+      tags:
+      - dish
+  /merchant/dishes/{id}:
+    delete:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Delete dish
+      tags:
+      - dish
+    patch:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Update dish
+      tags:
+      - dish
+  /merchant/dishes/{id}/disable:
+    post:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Disable dish
+      tags:
+      - dish
+  /merchant/dishes/{id}/enable:
+    post:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Enable dish
+      tags:
+      - dish
   /merchant/me:
     delete:
       description: Placeholder endpoint for future merchant deletion flow
@@ -1587,6 +1663,45 @@ paths:
       tags:
       - store
   /merchant/stores/{id}/coupons:
+    get:
+      description: Lists all coupons for an owned store, including drafts/disabled/expired
+      parameters:
+      - description: Store ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List my store coupons
+      tags:
+      - coupon
     post:
       consumes:
       - application/json
@@ -1696,6 +1811,77 @@ paths:
       security:
       - BearerAuth: []
       summary: Delete store coupon
+      tags:
+      - coupon
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Store ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Coupon ID
+        in: path
+        name: couponId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update store coupon
+      tags:
+      - coupon
+  /merchant/stores/{id}/coupons/{couponId}/disable:
+    post:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Disable store coupon
+      tags:
+      - coupon
+  /merchant/stores/{id}/coupons/{couponId}/enable:
+    post:
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Enable store coupon
       tags:
       - coupon
   /merchant/stores/{id}/deactivate:

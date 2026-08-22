@@ -14,6 +14,7 @@ type Coupon struct {
 	Title              string         `gorm:"type:varchar(100);not null" json:"title"`
 	Description        string         `gorm:"type:text" json:"description"`
 	ImageURL           string         `gorm:"type:varchar(255)" json:"image_url"`
+	DishIDs            string         `gorm:"type:jsonb;default:'[]'" json:"dish_ids"`
 	Type               string         `gorm:"type:varchar(20);not null" json:"type"`
 	CouponType         string         `gorm:"type:varchar(20)" json:"coupon_type"`
 	Value              string         `gorm:"type:varchar(50)" json:"value"`

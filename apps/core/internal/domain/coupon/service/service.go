@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -12,8 +13,11 @@ import (
 )
 
 const (
-	storeStatusPublished int16 = 1
-	couponStatusActive         = "active"
+	storeStatusPublished  int16 = 1
+	couponStatusActive          = "active"
+	couponStatusSoldOut         = "sold_out"
+	couponStatusExpired         = "expired"
+	couponStatusScheduled       = "scheduled"
 )
 
 var (
@@ -34,16 +38,40 @@ var (
 )
 
 type CreateStoreCouponInput struct {
-	Title         string
-	Description   string
-	Type          string
-	Price         float64
-	TotalQuantity int
-	MaxPerUser    int
-	ValidFrom     *time.Time
-	ValidUntil    *time.Time
-	Terms         string
-	Status        string
+	Title              string
+	Description        string
+	Type               string
+	CouponType         string
+	Price              float64
+	OriginalPrice      float64
+	SalePrice          float64
+	DiscountPercentage float64
+	ImageURL           string
+	DishIDs            []int64
+	TotalQuantity      int
+	MaxPerUser         int
+	ValidFrom          *time.Time
+	ValidUntil         *time.Time
+	Terms              string
+	Status             string
+}
+
+type UpdateStoreCouponInput struct {
+	Title              *string
+	Description        *string
+	CouponType         *string
+	ImageURL           *string
+	Price              *float64
+	OriginalPrice      *float64
+	SalePrice          *float64
+	DiscountPercentage *float64
+	DishIDs            *[]int64
+	TotalQuantity      *int
+	MaxPerUser         *int
+	ValidFrom          **time.Time
+	ValidUntil         **time.Time
+	Terms              *string
+	Status             *string
 }
 
 type ValidateInput struct {
@@ -73,6 +101,28 @@ func NewCouponService(db *gorm.DB) *CouponService {
 		db = database.DB
 	}
 	return &CouponService{db: db}
+}
+
+// ComputeStatus derives the effective, display-facing status for a coupon.
+// draft/disabled are terminal, merchant-controlled states and are never
+// overridden by quantity or date checks. now is passed in explicitly so
+// this stays a pure, deterministically testable function. Exported because
+// the handler package uses it to compute the status shown in API responses
+// without persisting it (see Task 9).
+func ComputeStatus(coupon model.Coupon, now time.Time) string {
+	if coupon.Status == "draft" || coupon.Status == "disabled" {
+		return coupon.Status
+	}
+	if coupon.TotalQuantity > 0 && coupon.ClaimedCount >= coupon.TotalQuantity {
+		return couponStatusSoldOut
+	}
+	if coupon.ValidUntil != nil && coupon.ValidUntil.Before(now) {
+		return couponStatusExpired
+	}
+	if coupon.ValidFrom != nil && coupon.ValidFrom.After(now) {
+		return couponStatusScheduled
+	}
+	return coupon.Status
 }
 
 func (s *CouponService) CreateForStore(ctx context.Context, userID, storeID int64, input CreateStoreCouponInput) (*model.Coupon, error) {
@@ -110,17 +160,39 @@ func (s *CouponService) CreateForStore(ctx context.Context, userID, storeID int6
 		return nil, ErrStoreNotPublished
 	}
 
+	imageURL := strings.TrimSpace(input.ImageURL)
+	if imageURL == "" && len(input.DishIDs) == 1 {
+		var dish model.Dish
+		if err := s.db.WithContext(ctx).Where("id = ? AND merchant_id = ?", input.DishIDs[0], merchant.ID).First(&dish).Error; err == nil {
+			imageURL = dish.ImageURL
+		}
+	}
+	dishIDs := input.DishIDs
+	if dishIDs == nil {
+		dishIDs = []int64{}
+	}
+	dishIDsJSON, err := json.Marshal(dishIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	coupon := model.Coupon{
-		MerchantID:    store.MerchantID,
-		StoreID:       &store.ID,
-		Title:         title,
-		Description:   input.Description,
-		Type:          couponType,
-		Price:         input.Price,
-		TotalQuantity: input.TotalQuantity,
-		MaxPerUser:    input.MaxPerUser,
-		Terms:         input.Terms,
-		Status:        couponStatusActive,
+		MerchantID:         store.MerchantID,
+		StoreID:            &store.ID,
+		Title:              title,
+		Description:        input.Description,
+		Type:               couponType,
+		CouponType:         input.CouponType,
+		Price:              input.Price,
+		OriginalPrice:      input.OriginalPrice,
+		SalePrice:          input.SalePrice,
+		DiscountPercentage: input.DiscountPercentage,
+		ImageURL:           imageURL,
+		DishIDs:            string(dishIDsJSON),
+		TotalQuantity:      input.TotalQuantity,
+		MaxPerUser:         input.MaxPerUser,
+		Terms:              input.Terms,
+		Status:             couponStatusActive,
 	}
 	if strings.TrimSpace(input.Status) != "" {
 		coupon.Status = strings.TrimSpace(input.Status)
@@ -176,6 +248,173 @@ func (s *CouponService) DeleteForStore(ctx context.Context, userID, storeID, cou
 	}
 
 	return s.db.WithContext(ctx).Where("id = ?", couponID).Delete(&model.Coupon{}).Error
+}
+
+func (s *CouponService) ListForMerchant(ctx context.Context, userID, storeID int64) ([]model.Coupon, error) {
+	var merchant model.Merchant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&merchant).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStoreForbidden
+		}
+		return nil, err
+	}
+
+	var store model.Store
+	if err := s.db.WithContext(ctx).First(&store, storeID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStoreNotFound
+		}
+		return nil, err
+	}
+	if store.MerchantID != merchant.ID {
+		return nil, ErrStoreForbidden
+	}
+
+	var coupons []model.Coupon
+	if err := s.db.WithContext(ctx).
+		Where("store_id = ?", storeID).
+		Order("id desc").
+		Find(&coupons).Error; err != nil {
+		return nil, err
+	}
+	return coupons, nil
+}
+
+func (s *CouponService) loadOwnedCoupon(ctx context.Context, userID, storeID, couponID int64) (*model.Merchant, *model.Coupon, error) {
+	var merchant model.Merchant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&merchant).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, ErrStoreForbidden
+		}
+		return nil, nil, err
+	}
+
+	var store model.Store
+	if err := s.db.WithContext(ctx).First(&store, storeID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, ErrStoreNotFound
+		}
+		return nil, nil, err
+	}
+	if store.MerchantID != merchant.ID {
+		return nil, nil, ErrStoreForbidden
+	}
+
+	var coupon model.Coupon
+	if err := s.db.WithContext(ctx).First(&coupon, couponID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, ErrCouponNotFound
+		}
+		return nil, nil, err
+	}
+	if coupon.StoreID == nil || *coupon.StoreID != storeID || coupon.MerchantID != merchant.ID {
+		return nil, nil, ErrCouponNotFound
+	}
+	return &merchant, &coupon, nil
+}
+
+func (s *CouponService) UpdateForStore(ctx context.Context, userID, storeID, couponID int64, input UpdateStoreCouponInput) (*model.Coupon, error) {
+	_, coupon, err := s.loadOwnedCoupon(ctx, userID, storeID, couponID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that ValidFrom is not after ValidUntil (considering effective post-update values)
+	effectiveFrom := coupon.ValidFrom
+	if input.ValidFrom != nil {
+		effectiveFrom = *input.ValidFrom
+	}
+	effectiveUntil := coupon.ValidUntil
+	if input.ValidUntil != nil {
+		effectiveUntil = *input.ValidUntil
+	}
+	if effectiveFrom != nil && effectiveUntil != nil && effectiveFrom.After(*effectiveUntil) {
+		return nil, ErrInvalidCouponInput
+	}
+
+	updates := map[string]interface{}{}
+	if input.Title != nil {
+		trimmed := strings.TrimSpace(*input.Title)
+		if trimmed == "" {
+			return nil, ErrInvalidCouponInput
+		}
+		updates["title"] = trimmed
+	}
+	if input.Description != nil {
+		updates["description"] = *input.Description
+	}
+	if input.CouponType != nil {
+		updates["coupon_type"] = *input.CouponType
+	}
+	if input.ImageURL != nil {
+		updates["image_url"] = *input.ImageURL
+	}
+	if input.Price != nil {
+		updates["price"] = *input.Price
+	}
+	if input.OriginalPrice != nil {
+		updates["original_price"] = *input.OriginalPrice
+	}
+	if input.SalePrice != nil {
+		updates["sale_price"] = *input.SalePrice
+	}
+	if input.DiscountPercentage != nil {
+		updates["discount_percentage"] = *input.DiscountPercentage
+	}
+	if input.DishIDs != nil {
+		dishIDsJSON, err := json.Marshal(*input.DishIDs)
+		if err != nil {
+			return nil, err
+		}
+		updates["dish_ids"] = string(dishIDsJSON)
+	}
+	if input.TotalQuantity != nil {
+		if *input.TotalQuantity < 0 {
+			return nil, ErrInvalidCouponInput
+		}
+		updates["total_quantity"] = *input.TotalQuantity
+	}
+	if input.MaxPerUser != nil {
+		if *input.MaxPerUser <= 0 {
+			return nil, ErrInvalidCouponInput
+		}
+		updates["max_per_user"] = *input.MaxPerUser
+	}
+	if input.ValidFrom != nil {
+		updates["valid_from"] = *input.ValidFrom
+	}
+	if input.ValidUntil != nil {
+		updates["valid_until"] = *input.ValidUntil
+		if *input.ValidUntil != nil {
+			updates["expiry_date"] = **input.ValidUntil
+		}
+	}
+	if input.Terms != nil {
+		updates["terms"] = *input.Terms
+	}
+	if input.Status != nil {
+		status := strings.TrimSpace(*input.Status)
+		if status != "draft" && status != couponStatusActive && status != "disabled" {
+			return nil, ErrInvalidCouponInput
+		}
+		updates["status"] = status
+	}
+	if len(updates) == 0 {
+		return coupon, nil
+	}
+	if err := s.db.WithContext(ctx).Model(&model.Coupon{}).Where("id = ?", couponID).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	_, refreshed, err := s.loadOwnedCoupon(ctx, userID, storeID, couponID)
+	return refreshed, err
+}
+
+func (s *CouponService) SetEnabled(ctx context.Context, userID, storeID, couponID int64, enabled bool) (*model.Coupon, error) {
+	status := "disabled"
+	if enabled {
+		status = couponStatusActive
+	}
+	return s.UpdateForStore(ctx, userID, storeID, couponID, UpdateStoreCouponInput{Status: &status})
 }
 
 func (s *CouponService) ListPublishedByStore(ctx context.Context, storeID int64) ([]model.Coupon, error) {

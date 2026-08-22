@@ -10,6 +10,7 @@ import (
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/category"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/dish"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/feed"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/media"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/merchant"
@@ -44,6 +45,7 @@ func Setup(router *gin.Engine, cfg *config.Config) {
 	user.RegisterRoutes(api, cfg)
 	users.RegisterRoutes(api, cfg)
 	coupon.RegisterRoutes(api, cfg)
+	dish.RegisterRoutes(api, cfg)
 	feed.RegisterRoutes(api, cfg)
 	merchant.RegisterRoutes(api, cfg)
 	merchants.RegisterRoutes(api, cfg)

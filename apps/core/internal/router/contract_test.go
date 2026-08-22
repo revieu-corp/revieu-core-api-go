@@ -17,7 +17,7 @@ import (
 type routeContract struct {
 	method   string
 	path     string
-	requires bool // requires authentication
+	requires bool //nolint:unused // reserved for a future auth-contract assertion; not wired up yet
 }
 
 func contractCfg() *config.Config {

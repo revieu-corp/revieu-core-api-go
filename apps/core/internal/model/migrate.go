@@ -27,6 +27,7 @@ func All() []interface{} {
 		&StoreCategory{},
 		&Store{},
 		&StoreHour{},
+		&Dish{},
 		// Tags
 		&Tag{},
 		// Content

@@ -1038,3 +1038,48 @@ func strPtr(v string) *string {
 func int64SlicePtr(v []int64) *[]int64 {
 	return &v
 }
+
+func TestStoreServiceCreateAutoVerifiesMerchantWhenFlagEnabled(t *testing.T) {
+	t.Setenv("AUTO_VERIFY_NEW_MERCHANTS", "true")
+	db := setupStoreTestDB(t)
+	svc := NewStoreService(db)
+
+	userID := int64(9001)
+	if err := db.Create(&model.User{ID: userID, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	if _, err := svc.Create(context.Background(), userID, dto.CreateStoreRequest{Name: "Flag On Store"}); err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	var merchant model.Merchant
+	if err := db.Where("user_id = ?", userID).First(&merchant).Error; err != nil {
+		t.Fatalf("failed to load merchant: %v", err)
+	}
+	if merchant.VerificationStatus != "verified" || merchant.Status != 0 {
+		t.Fatalf("expected merchant to be auto-verified, got status=%d verification_status=%q", merchant.Status, merchant.VerificationStatus)
+	}
+}
+
+func TestStoreServiceCreateDoesNotAutoVerifyByDefault(t *testing.T) {
+	db := setupStoreTestDB(t)
+	svc := NewStoreService(db)
+
+	userID := int64(9002)
+	if err := db.Create(&model.User{ID: userID, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	if _, err := svc.Create(context.Background(), userID, dto.CreateStoreRequest{Name: "Flag Off Store"}); err != nil {
+		t.Fatalf("create returned error: %v", err)
+	}
+
+	var merchant model.Merchant
+	if err := db.Where("user_id = ?", userID).First(&merchant).Error; err != nil {
+		t.Fatalf("failed to load merchant: %v", err)
+	}
+	if merchant.VerificationStatus == "verified" {
+		t.Fatalf("expected merchant to remain unverified when flag is off, got %q", merchant.VerificationStatus)
+	}
+}

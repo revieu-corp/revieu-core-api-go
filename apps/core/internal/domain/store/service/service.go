@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -41,6 +42,25 @@ func NewStoreService(db *gorm.DB) *StoreService {
 		db = database.DB
 	}
 	return &StoreService{db: db}
+}
+
+func autoVerifyNewMerchantsEnabled() bool {
+	enabled, err := strconv.ParseBool(os.Getenv("AUTO_VERIFY_NEW_MERCHANTS"))
+	return err == nil && enabled
+}
+
+// verifyMerchantIfEnabled marks a merchant as active/verified when the
+// AUTO_VERIFY_NEW_MERCHANTS demo flag is on. It never runs otherwise, so
+// normal merchant verification review is unaffected in every other
+// environment. See docs/superpowers/specs/2026-08-21-qb-merchant-dish-coupon-design.md.
+func (s *StoreService) verifyMerchantIfEnabled(ctx context.Context, merchantID int64) error {
+	if !autoVerifyNewMerchantsEnabled() {
+		return nil
+	}
+	return s.db.WithContext(ctx).
+		Model(&model.Merchant{}).
+		Where("id = ?", merchantID).
+		Updates(map[string]interface{}{"status": 0, "verification_status": "verified"}).Error
 }
 
 func (s *StoreService) Create(ctx context.Context, userID int64, req dto.CreateStoreRequest) (*model.Store, error) {
@@ -147,6 +167,10 @@ func (s *StoreService) Create(ctx context.Context, userID int64, req dto.CreateS
 			Where("id = ?", merchant.ID).
 			UpdateColumn("total_stores", gorm.Expr("total_stores + 1")).Error
 	}); err != nil {
+		return nil, err
+	}
+
+	if err := s.verifyMerchantIfEnabled(ctx, merchant.ID); err != nil {
 		return nil, err
 	}
 
@@ -373,10 +397,16 @@ func (s *StoreService) updateStatusOwned(ctx context.Context, userID, storeID in
 	if store.Status == toStatus {
 		return nil
 	}
-	return s.db.WithContext(ctx).
+	if err := s.db.WithContext(ctx).
 		Model(&model.Store{}).
 		Where("id = ?", storeID).
-		UpdateColumn("status", toStatus).Error
+		UpdateColumn("status", toStatus).Error; err != nil {
+		return err
+	}
+	if toStatus == StoreStatusPublished {
+		return s.verifyMerchantIfEnabled(ctx, merchant.ID)
+	}
+	return nil
 }
 
 func (s *StoreService) Update(ctx context.Context, userID, storeID int64, req dto.UpdateStoreRequest) (*model.Store, error) {
