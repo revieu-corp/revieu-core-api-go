@@ -52,8 +52,8 @@ cd revieu-core-api-go
 # Copy example secrets
 export CLOUDFLARE_ACCOUNT_ID=...
 export CLOUDFLARE_KV_NAMESPACE_ID=...
-export CLOUDFLARE_API_TOKEN=...
-export JWT_SECRET=...
+export CLOUDFLARE_API_TOKEN="<CLOUDFLARE_API_TOKEN>"
+export JWT_SECRET="<JWT_SECRET>"
 
 # Encrypt before committing
 ./scripts/seal-secrets.sh
@@ -66,7 +66,7 @@ cd apps/core
 
 # (first time / schema changes) apply DB migrations
 go install github.com/pressly/goose/v3/cmd/goose@latest
-make migrate-up DB_DSN='postgres://postgres:postgres@localhost:5432/revieu?sslmode=disable'
+make migrate-up GOOSE="" DB_DSN=""
 
 # start API service
 go run cmd/app/main.go
@@ -89,10 +89,10 @@ go install github.com/pressly/goose/v3/cmd/goose@latest
 
 ```bash
 export GOOSE="$HOME/go/bin/goose"
-export DB_PASSWORD='123456'
+export DB_PASSWORD="<DB_PASSWORD>"
 
-export DEV_DSN="postgres://postgres:${DB_PASSWORD}@10.0.0.4:5432/revieu?sslmode=disable"
-export PRD_DSN="postgres://postgres:${DB_PASSWORD}@10.0.0.1:5432/revieu?sslmode=disable"
+export DEV_DSN="<DEV_DATABASE_URL>"
+export PRD_DSN="<PROD_DATABASE_URL>"
 ```
 
 ### 2. Add a new schema change (when fields/tables change)
@@ -139,7 +139,7 @@ make migrate-up GOOSE="$GOOSE" DB_DSN="$PRD_DSN"
 cd apps/core
 make migrate-status GOOSE="$GOOSE" DB_DSN="$PRD_DSN" # initialize goose_db_version if missing
 
-PGPASSWORD="$DB_PASSWORD" psql -h 10.0.0.1 -p 5432 -U postgres -d revieu -v ON_ERROR_STOP=1 -c \
+PGPASSWORD="<DB_PASSWORD>" psql -h "<DB_HOST>" -p 5432 -U "<DB_USER>" -d "<DB_NAME>" -v ON_ERROR_STOP=1 -c \
 "INSERT INTO goose_db_version (version_id, is_applied)
  SELECT 1, true
  WHERE NOT EXISTS (
@@ -226,10 +226,10 @@ docker run -p 8080:8080 revieu-core-api-go
 
 ```bash
 python scripts/generate_db_erd_svg.py \
-  --host 10.0.0.1 \
-  --user postgres \
-  --db revieu \
-  --password 123456 \
+  --host "<DB_HOST>" \
+  --user "<DB_USER>" \
+  --db "<DB_NAME>" \
+  --password "<DB_PASSWORD>" \
   --output docs/database-erd.svg
 ```
 

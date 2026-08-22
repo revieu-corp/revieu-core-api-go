@@ -71,8 +71,8 @@ cd revieu-core-api-go
 
 2. **Create your secrets file:**
    ```bash
-   export CLOUDFLARE_API_TOKEN=...
-   export JWT_SECRET=...
+   export CLOUDFLARE_API_TOKEN="<CLOUDFLARE_API_TOKEN>"
+   export JWT_SECRET="<JWT_SECRET>"
    ```
 
 3. **Encrypt secrets:**
