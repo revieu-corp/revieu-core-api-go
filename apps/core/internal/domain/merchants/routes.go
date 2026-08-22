@@ -20,7 +20,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	followMerchantH := followHandler.NewMerchantHandler(followSvc)
 
 	// Public: merchant list, detail, reviews
-	merchantsPublic := r.Group("/merchants")
+	merchantsPublic := r.Group("/merchants", authorization.OptionalJWTAuth(cfg.JWT))
 	{
 		merchantsPublic.GET("", merchantH.List)
 		merchantsPublic.GET("/:id", merchantH.Detail)

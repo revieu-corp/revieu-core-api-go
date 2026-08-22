@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/visibility"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
 )
@@ -35,6 +36,17 @@ func (s *ContentService) ListUserPosts(ctx context.Context, userID int64, cursor
 	return posts, total, nil
 }
 
+func (s *ContentService) ListVisibleUserPosts(ctx context.Context, userID, viewerID int64, cursor *int64, limit int) ([]model.Post, int64, error) {
+	allowed, err := visibility.CanViewUserContent(ctx, s.db, userID, viewerID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !allowed {
+		return nil, 0, visibility.ErrPrivateContent
+	}
+	return s.ListUserPosts(ctx, userID, cursor, limit)
+}
+
 func (s *ContentService) ListUserReviews(ctx context.Context, userID int64, cursor *int64, limit int) ([]model.Review, int64, *int64, error) {
 	baseQuery := s.db.WithContext(ctx).Model(&model.Review{}).Where("user_id = ?", userID)
 	var total int64
@@ -57,6 +69,17 @@ func (s *ContentService) ListUserReviews(ctx context.Context, userID int64, curs
 		reviews = reviews[:limit]
 	}
 	return reviews, total, nextCursor, nil
+}
+
+func (s *ContentService) ListVisibleUserReviews(ctx context.Context, userID, viewerID int64, cursor *int64, limit int) ([]model.Review, int64, *int64, error) {
+	allowed, err := visibility.CanViewUserContent(ctx, s.db, userID, viewerID)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	if !allowed {
+		return nil, 0, nil, visibility.ErrPrivateContent
+	}
+	return s.ListUserReviews(ctx, userID, cursor, limit)
 }
 
 func (s *ContentService) ListFavorites(ctx context.Context, userID int64, targetType string, cursor *int64, limit int) ([]model.Favorite, int64, error) {

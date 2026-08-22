@@ -24,6 +24,8 @@ func setupStoreTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.UserProfile{},
+		&model.UserFollow{},
+		&model.UserPrivacy{},
 		&model.Merchant{},
 		&model.Store{},
 		&model.StoreHour{},

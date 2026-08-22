@@ -30,7 +30,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	followUserH := followHandler.NewUserHandler(followSvc)
 
 	// Public: user profiles and content
-	usersPublic := r.Group("/users")
+	usersPublic := r.Group("/users", authorization.OptionalJWTAuth(cfg.JWT))
 	{
 		usersPublic.GET("/:id", profileH.GetPublicProfile)
 		usersPublic.GET("/:id/posts", postH.ListUserPosts)

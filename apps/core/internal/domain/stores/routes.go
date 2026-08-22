@@ -22,7 +22,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	couponH := couponHandler.NewCouponHandler(couponSvc)
 
 	// Public: store list, detail, reviews, hours, and coupons
-	storesPublic := r.Group("/stores")
+	storesPublic := r.Group("/stores", authorization.OptionalJWTAuth(cfg.JWT))
 	{
 		storesPublic.GET("", storeH.List)
 		storesPublic.GET("/:id", storeH.Detail)

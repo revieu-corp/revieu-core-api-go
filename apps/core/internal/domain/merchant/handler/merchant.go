@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/merchant/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/merchant/service"
 	reviewdto "github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/review/dto"
-	"github.com/gin-gonic/gin"
 )
 
 type MerchantHandler struct {
@@ -91,7 +91,7 @@ func (h *MerchantHandler) Reviews(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	reviews, err := h.svc.Reviews(c.Request.Context(), id)
+	reviews, err := h.svc.ReviewsForViewer(c.Request.Context(), id, c.GetInt64("user_id"))
 	if err != nil {
 		if errors.Is(err, service.ErrMerchantNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})

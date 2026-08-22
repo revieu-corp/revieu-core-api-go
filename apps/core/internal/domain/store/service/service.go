@@ -11,6 +11,7 @@ import (
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/store/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/visibility"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -257,20 +258,29 @@ func (s *StoreService) DetailPublished(ctx context.Context, storeID int64) (*mod
 }
 
 func (s *StoreService) ReviewsPublished(ctx context.Context, storeID int64) ([]model.Review, error) {
+	return s.ReviewsPublishedForViewer(ctx, storeID, 0)
+}
+
+func (s *StoreService) ReviewsPublishedForViewer(ctx context.Context, storeID, viewerID int64) ([]model.Review, error) {
 	if _, err := s.DetailPublished(ctx, storeID); err != nil {
 		return nil, err
 	}
+	query := s.db.WithContext(ctx).
+		Model(&model.Review{}).
+		Where("store_id = ?", storeID)
+	query = visibility.ScopePublicContent(query, "reviews.user_id", viewerID)
 	var reviews []model.Review
-	if err := s.db.WithContext(ctx).
-		Where("store_id = ?", storeID).
-		Order("id desc").
-		Find(&reviews).Error; err != nil {
+	if err := query.Order("id desc").Find(&reviews).Error; err != nil {
 		return nil, err
 	}
 	return reviews, nil
 }
 
 func (s *StoreService) ReviewsPublishedPaginated(ctx context.Context, storeID int64, query dto.StoreReviewListQuery) ([]model.Review, *int64, error) {
+	return s.ReviewsPublishedPaginatedForViewer(ctx, storeID, query, 0)
+}
+
+func (s *StoreService) ReviewsPublishedPaginatedForViewer(ctx context.Context, storeID int64, query dto.StoreReviewListQuery, viewerID int64) ([]model.Review, *int64, error) {
 	if _, err := s.DetailPublished(ctx, storeID); err != nil {
 		return nil, nil, err
 	}
@@ -282,6 +292,7 @@ func (s *StoreService) ReviewsPublishedPaginated(ctx context.Context, storeID in
 		Preload("User").
 		Preload("User.Profile").
 		Where("store_id = ?", storeID)
+	dbQuery = visibility.ScopePublicContent(dbQuery, "reviews.user_id", viewerID)
 
 	if query.Cursor != nil {
 		dbQuery = dbQuery.Where("reviews.id < ?", *query.Cursor)

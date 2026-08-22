@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/visibility"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
 )
@@ -50,11 +51,17 @@ func (s *MerchantService) Detail(ctx context.Context, id int64) (*model.Merchant
 }
 
 func (s *MerchantService) Reviews(ctx context.Context, merchantID int64) ([]model.Review, error) {
+	return s.ReviewsForViewer(ctx, merchantID, 0)
+}
+
+func (s *MerchantService) ReviewsForViewer(ctx context.Context, merchantID, viewerID int64) ([]model.Review, error) {
 	if _, err := s.Detail(ctx, merchantID); err != nil {
 		return nil, err
 	}
+	query := s.db.WithContext(ctx).Model(&model.Review{}).Where("merchant_id = ?", merchantID)
+	query = visibility.ScopePublicContent(query, "reviews.user_id", viewerID)
 	var reviews []model.Review
-	if err := s.db.WithContext(ctx).Where("merchant_id = ?", merchantID).Order("id desc").Find(&reviews).Error; err != nil {
+	if err := query.Order("id desc").Find(&reviews).Error; err != nil {
 		return nil, err
 	}
 	return reviews, nil

@@ -14,7 +14,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	h := handler.NewReviewHandler(svc)
 
 	// Public: anyone can read review details
-	reviewsPublic := r.Group("/reviews")
+	reviewsPublic := r.Group("/reviews", authorization.OptionalJWTAuth(cfg.JWT))
 	{
 		reviewsPublic.GET("/:id", h.Detail)
 	}

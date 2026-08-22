@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/review/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/review/service"
-	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/visibility"
 )
 
 type ReviewHandler struct {
@@ -72,8 +73,12 @@ func (h *ReviewHandler) Detail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	review, err := h.svc.Detail(c.Request.Context(), id)
+	review, err := h.svc.DetailForViewer(c.Request.Context(), id, c.GetInt64("user_id"))
 	if err != nil {
+		if errors.Is(err, visibility.ErrPrivateContent) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "content is private"})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
