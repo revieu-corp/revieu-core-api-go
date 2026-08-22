@@ -7,6 +7,15 @@ definitions:
           type: string
         type: array
     type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.CouponPage:
+    properties:
+      cursor:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Coupon'
+        type: array
+    type: object
   github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_media_dto.FileRequest:
     properties:
       content_type:
@@ -414,6 +423,71 @@ definitions:
         type: integer
       voucher_status:
         type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_model.Coupon:
+    properties:
+      claimed_count:
+        type: integer
+      coupon_type:
+        type: string
+      created_at:
+        type: string
+      deleted_at:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      discount_percentage:
+        type: number
+      dish_ids:
+        type: string
+      expiry_date:
+        type: string
+      id:
+        type: integer
+      image_url:
+        type: string
+      max_per_user:
+        type: integer
+      merchant_id:
+        type: integer
+      original_price:
+        type: number
+      package_id:
+        type: integer
+      price:
+        type: number
+      redeemed_count:
+        type: integer
+      sale_price:
+        type: number
+      status:
+        type: string
+      store_id:
+        type: integer
+      terms:
+        type: string
+      title:
+        type: string
+      total_quantity:
+        type: integer
+      type:
+        type: string
+      updated_at:
+        type: string
+      valid_from:
+        type: string
+      valid_until:
+        type: string
+      value:
+        type: string
+    type: object
+  gorm.DeletedAt:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
     type: object
   internal_domain_auth.ForgotPasswordRequest:
     properties:
@@ -1375,6 +1449,212 @@ paths:
       summary: Create media upload
       tags:
       - media
+  /merchant/coupons:
+    get:
+      description: Lists coupons owned by the authenticated active merchant
+      parameters:
+      - description: 'Coupon status: draft, active, or disabled'
+        in: query
+        name: status
+        type: string
+      - description: Filter by owned store ID
+        in: query
+        name: store_id
+        type: integer
+      - description: RFC3339 validity start upper bound
+        in: query
+        name: valid_from_before
+        type: string
+      - description: RFC3339 validity end lower bound
+        in: query
+        name: valid_until_after
+        type: string
+      - default: 20
+        description: Page size (1-100)
+        in: query
+        name: limit
+        type: integer
+      - description: ID cursor for the next page
+        in: query
+        name: cursor
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_coupon_service.CouponPage'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List merchant coupons
+      tags:
+      - coupon
+  /merchant/coupons/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates editable fields for an owned coupon; lifecycle changes
+        use activate/deactivate
+      parameters:
+      - description: Coupon ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Update coupon request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_domain_coupon_handler.UpdateStoreCouponRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update merchant coupon
+      tags:
+      - coupon
+  /merchant/coupons/{id}/activate:
+    post:
+      description: Publishes an owned coupon for customer purchase
+      parameters:
+      - description: Coupon ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Activate merchant coupon
+      tags:
+      - coupon
+  /merchant/coupons/{id}/deactivate:
+    post:
+      description: Hides an owned coupon from customer purchase
+      parameters:
+      - description: Coupon ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Deactivate merchant coupon
+      tags:
+      - coupon
   /merchant/me:
     delete:
       description: Placeholder endpoint for future merchant deletion flow

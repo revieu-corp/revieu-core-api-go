@@ -69,6 +69,197 @@ func NewCouponHandler(svc *service.CouponService) *CouponHandler {
 	return &CouponHandler{svc: svc}
 }
 
+// ListMerchantCoupons godoc
+// @Summary List merchant coupons
+// @Description Lists coupons owned by the authenticated active merchant
+// @Tags coupon
+// @Produce json
+// @Param status query string false "Coupon status: draft, active, or disabled"
+// @Param store_id query int false "Filter by owned store ID"
+// @Param valid_from_before query string false "RFC3339 validity start upper bound"
+// @Param valid_until_after query string false "RFC3339 validity end lower bound"
+// @Param limit query int false "Page size (1-100)" default(20)
+// @Param cursor query int false "ID cursor for the next page"
+// @Success 200 {object} service.CouponPage
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Security BearerAuth
+// @Router /merchant/coupons [get]
+func (h *CouponHandler) ListMerchantCoupons(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	query, err := parseMerchantCouponQuery(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coupon query"})
+		return
+	}
+	page, err := h.svc.ListForMerchant(c.Request.Context(), userID, query)
+	if err != nil {
+		status, msg := couponErrorStatus(err)
+		c.JSON(status, gin.H{"error": msg})
+		return
+	}
+	c.JSON(http.StatusOK, page)
+}
+
+// UpdateMerchantCoupon godoc
+// @Summary Update merchant coupon
+// @Description Updates editable fields for an owned coupon; lifecycle changes use activate/deactivate
+// @Tags coupon
+// @Accept json
+// @Produce json
+// @Param id path int true "Coupon ID"
+// @Param request body UpdateStoreCouponRequest true "Update coupon request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Security BearerAuth
+// @Router /merchant/coupons/{id} [patch]
+func (h *CouponHandler) UpdateMerchantCoupon(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	couponID, err := parsePositiveID(c.Param("id"), "coupon")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	var req UpdateStoreCouponRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coupon payload"})
+		return
+	}
+	coupon, err := h.svc.UpdateForMerchant(c.Request.Context(), userID, couponID, toUpdateStoreCouponInput(req))
+	if err != nil {
+		status, msg := couponErrorStatus(err)
+		c.JSON(status, gin.H{"error": msg})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": coupon})
+}
+
+// ActivateMerchantCoupon godoc
+// @Summary Activate merchant coupon
+// @Description Publishes an owned coupon for customer purchase
+// @Tags coupon
+// @Produce json
+// @Param id path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Security BearerAuth
+// @Router /merchant/coupons/{id}/activate [post]
+func (h *CouponHandler) ActivateMerchantCoupon(c *gin.Context) {
+	h.setMerchantCouponStatus(c, "active")
+}
+
+// DeactivateMerchantCoupon godoc
+// @Summary Deactivate merchant coupon
+// @Description Hides an owned coupon from customer purchase
+// @Tags coupon
+// @Produce json
+// @Param id path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Security BearerAuth
+// @Router /merchant/coupons/{id}/deactivate [post]
+func (h *CouponHandler) DeactivateMerchantCoupon(c *gin.Context) {
+	h.setMerchantCouponStatus(c, "disabled")
+}
+
+func (h *CouponHandler) setMerchantCouponStatus(c *gin.Context, status string) {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	couponID, err := parsePositiveID(c.Param("id"), "coupon")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	coupon, err := h.svc.SetStatusForMerchant(c.Request.Context(), userID, couponID, status)
+	if err != nil {
+		statusCode, msg := couponErrorStatus(err)
+		c.JSON(statusCode, gin.H{"error": msg})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": coupon})
+}
+
+func parseMerchantCouponQuery(c *gin.Context) (service.ListMerchantCouponsQuery, error) {
+	limit := 0
+	if raw := c.Query("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return service.ListMerchantCouponsQuery{}, err
+		}
+		limit = parsed
+	}
+	cursor := int64(0)
+	if raw := c.Query("cursor"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return service.ListMerchantCouponsQuery{}, err
+		}
+		cursor = parsed
+	}
+	query := service.ListMerchantCouponsQuery{Status: c.Query("status"), Limit: limit, Cursor: cursor}
+	if raw := c.Query("store_id"); raw != "" {
+		storeID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || storeID <= 0 {
+			return service.ListMerchantCouponsQuery{}, errors.New("invalid store id")
+		}
+		query.StoreID = &storeID
+	}
+	if raw := c.Query("valid_from_before"); raw != "" {
+		value, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return service.ListMerchantCouponsQuery{}, err
+		}
+		query.ValidFromBefore = &value
+	}
+	if raw := c.Query("valid_until_after"); raw != "" {
+		value, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return service.ListMerchantCouponsQuery{}, err
+		}
+		query.ValidUntilAfter = &value
+	}
+	return query, nil
+}
+
+func parsePositiveID(raw, resource string) (int64, error) {
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.New("invalid " + resource + " id")
+	}
+	return id, nil
+}
+
+func toUpdateStoreCouponInput(req UpdateStoreCouponRequest) service.UpdateStoreCouponInput {
+	return service.UpdateStoreCouponInput{
+		Title: req.Title, Description: req.Description, Type: req.Type, CouponType: req.CouponType,
+		Price: req.Price, OriginalPrice: req.OriginalPrice, SalePrice: req.SalePrice,
+		DiscountPercentage: req.DiscountPercentage, ImageURL: req.ImageURL, DishIDs: req.DishIDs,
+		TotalQuantity: req.TotalQuantity, MaxPerUser: req.MaxPerUser, ValidFrom: req.ValidFrom,
+		ValidUntil: req.ValidUntil, Terms: req.Terms, Status: req.Status,
+	}
+}
+
 // CreateStoreCoupon godoc
 // @Summary Create store coupon
 // @Description Creates a store-scoped coupon for an owned published store
@@ -421,7 +612,7 @@ func couponErrorStatus(err error) (int, string) {
 	switch {
 	case errors.Is(err, service.ErrCouponNotFound), errors.Is(err, service.ErrStoreNotFound):
 		return http.StatusNotFound, "not found"
-	case errors.Is(err, service.ErrStoreForbidden):
+	case errors.Is(err, service.ErrStoreForbidden), errors.Is(err, service.ErrMerchantForbidden):
 		return http.StatusForbidden, "forbidden"
 	case errors.Is(err, service.ErrCouponStoreMismatch):
 		return http.StatusNotFound, "not found"

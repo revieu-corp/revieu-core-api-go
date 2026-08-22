@@ -31,6 +31,7 @@ var (
 	ErrStoreNotFound           = errors.New("store not found")
 	ErrStoreNotPublished       = errors.New("store not published")
 	ErrStoreForbidden          = errors.New("store forbidden")
+	ErrMerchantForbidden       = errors.New("merchant forbidden")
 	ErrInvalidCouponInput      = errors.New("invalid coupon input")
 	ErrDeprecatedCouponRedeem  = errors.New("coupon direct redeem is deprecated, redeem voucher instead")
 	ErrDeprecatedCouponPayment = errors.New("coupon payment initiation is deprecated, use order payment")
@@ -92,6 +93,20 @@ type ValidateResult struct {
 	Description string  `json:"description"`
 }
 
+type ListMerchantCouponsQuery struct {
+	Status          string
+	StoreID         *int64
+	ValidFromBefore *time.Time
+	ValidUntilAfter *time.Time
+	Limit           int
+	Cursor          int64
+}
+
+type CouponPage struct {
+	Data   []model.Coupon `json:"data"`
+	Cursor *int64         `json:"cursor,omitempty"`
+}
+
 type CouponService struct {
 	db *gorm.DB
 }
@@ -101,6 +116,139 @@ func NewCouponService(db *gorm.DB) *CouponService {
 		db = database.DB
 	}
 	return &CouponService{db: db}
+}
+
+// ListForMerchant returns the authenticated merchant's live coupons, including
+// drafts and disabled coupons needed by the merchant console.
+func (s *CouponService) ListForMerchant(ctx context.Context, userID int64, query ListMerchantCouponsQuery) (*CouponPage, error) {
+	merchant, err := s.ensureMerchantPrincipal(ctx, userID, false)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := normalizeCouponPageSize(query.Limit)
+	if err != nil || query.Cursor < 0 {
+		return nil, ErrInvalidCouponInput
+	}
+
+	status := strings.ToLower(strings.TrimSpace(query.Status))
+	if status != "" && (status != couponStatusActive && status != couponStatusDraft && status != couponStatusDisabled) {
+		return nil, ErrInvalidCouponInput
+	}
+	if query.StoreID != nil && *query.StoreID <= 0 {
+		return nil, ErrInvalidCouponInput
+	}
+	if query.ValidFromBefore != nil && query.ValidUntilAfter != nil && query.ValidFromBefore.After(*query.ValidUntilAfter) {
+		return nil, ErrInvalidCouponInput
+	}
+
+	db := s.db.WithContext(ctx).Where("merchant_id = ?", merchant.ID)
+	if status != "" {
+		db = db.Where("status = ?", status)
+	}
+	if query.StoreID != nil {
+		db = db.Where("store_id = ?", *query.StoreID)
+	}
+	if query.ValidFromBefore != nil {
+		db = db.Where("(valid_from IS NULL OR valid_from <= ?)", *query.ValidFromBefore)
+	}
+	if query.ValidUntilAfter != nil {
+		db = db.Where("(valid_until IS NULL OR valid_until >= ?)", *query.ValidUntilAfter)
+	}
+	if query.Cursor > 0 {
+		db = db.Where("id < ?", query.Cursor)
+	}
+
+	rows := make([]model.Coupon, 0, limit)
+	if err := db.Order("id desc").Limit(limit + 1).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	page := &CouponPage{Data: rows}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		page.Data = rows
+		cursor := rows[len(rows)-1].ID
+		page.Cursor = &cursor
+	}
+	return page, nil
+}
+
+// UpdateForMerchant updates editable fields for an owned store-scoped coupon.
+// Lifecycle changes use SetStatusForMerchant so publish/deactivate transitions
+// cannot be hidden inside an arbitrary PATCH.
+func (s *CouponService) UpdateForMerchant(ctx context.Context, userID, couponID int64, input UpdateStoreCouponInput) (*model.Coupon, error) {
+	if input.Status != nil {
+		return nil, ErrInvalidCouponInput
+	}
+	merchant, err := s.ensureMerchantPrincipal(ctx, userID, false)
+	if err != nil {
+		return nil, err
+	}
+	var coupon model.Coupon
+	if err := s.db.WithContext(ctx).Where("id = ? AND merchant_id = ?", couponID, merchant.ID).First(&coupon).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCouponNotFound
+		}
+		return nil, err
+	}
+	if coupon.StoreID == nil {
+		return nil, ErrCouponNotStoreScoped
+	}
+	return s.UpdateForStore(ctx, userID, *coupon.StoreID, coupon.ID, input)
+}
+
+// SetStatusForMerchant applies the explicit activate/deactivate lifecycle
+// actions and makes activation a verified-merchant operation.
+func (s *CouponService) SetStatusForMerchant(ctx context.Context, userID, couponID int64, status string) (*model.Coupon, error) {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status != couponStatusActive && status != couponStatusDisabled {
+		return nil, ErrInvalidCouponInput
+	}
+	merchant, err := s.ensureMerchantPrincipal(ctx, userID, status == couponStatusActive)
+	if err != nil {
+		return nil, err
+	}
+
+	var coupon model.Coupon
+	if err := s.db.WithContext(ctx).Where("id = ? AND merchant_id = ?", couponID, merchant.ID).First(&coupon).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCouponNotFound
+		}
+		return nil, err
+	}
+	if status == couponStatusActive {
+		now := time.Now()
+		if coupon.ValidUntil != nil && coupon.ValidUntil.Before(now) {
+			return nil, ErrCouponExpired
+		}
+		if coupon.TotalQuantity-coupon.ClaimedCount <= 0 {
+			return nil, ErrCouponSoldOut
+		}
+		if coupon.StoreID != nil {
+			var store model.Store
+			if err := s.db.WithContext(ctx).First(&store, *coupon.StoreID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, ErrStoreNotFound
+				}
+				return nil, err
+			}
+			if store.MerchantID != merchant.ID {
+				return nil, ErrStoreForbidden
+			}
+			if store.Status != storeStatusPublished {
+				return nil, ErrStoreNotPublished
+			}
+		}
+	}
+	if coupon.Status == status {
+		return &coupon, nil
+	}
+	if err := s.db.WithContext(ctx).Model(&model.Coupon{}).
+		Where("id = ? AND merchant_id = ?", coupon.ID, merchant.ID).
+		Update("status", status).Error; err != nil {
+		return nil, err
+	}
+	coupon.Status = status
+	return &coupon, nil
 }
 
 func (s *CouponService) CreateForStore(ctx context.Context, userID, storeID int64, input CreateStoreCouponInput) (*model.Coupon, error) {
@@ -421,6 +569,44 @@ func (s *CouponService) ensureOwnedStore(ctx context.Context, userID, storeID in
 		return 0, ErrStoreForbidden
 	}
 	return merchant.ID, nil
+}
+
+func (s *CouponService) ensureMerchantPrincipal(ctx context.Context, userID int64, requireVerified bool) (*model.Merchant, error) {
+	if userID <= 0 {
+		return nil, ErrMerchantForbidden
+	}
+	var user model.User
+	if err := s.db.WithContext(ctx).First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMerchantForbidden
+		}
+		return nil, err
+	}
+	if user.Status != 0 || strings.ToLower(strings.TrimSpace(user.Role)) != "merchant" {
+		return nil, ErrMerchantForbidden
+	}
+
+	var merchant model.Merchant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&merchant).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMerchantForbidden
+		}
+		return nil, err
+	}
+	if requireVerified && strings.ToLower(strings.TrimSpace(merchant.VerificationStatus)) != "verified" {
+		return nil, ErrMerchantForbidden
+	}
+	return &merchant, nil
+}
+
+func normalizeCouponPageSize(limit int) (int, error) {
+	if limit == 0 {
+		return 20, nil
+	}
+	if limit < 1 || limit > 100 {
+		return 0, ErrInvalidCouponInput
+	}
+	return limit, nil
 }
 
 func resolveCouponPrices(price float64, original, sale, discount *float64) (float64, float64, float64, error) {

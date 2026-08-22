@@ -47,4 +47,14 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 		merchantStoresAuth.POST("/:id/coupons/:couponId/disable", couponH.DisableStoreCoupon)
 		merchantStoresAuth.DELETE("/:id/coupons/:couponId", couponH.DeleteStoreCoupon)
 	}
+
+	// Authenticated: merchant-wide coupon lifecycle management. The service
+	// enforces the merchant principal and verified gate for activation.
+	merchantCouponsAuth := r.Group("/merchant/coupons", authorization.JWTAuth(cfg.JWT))
+	{
+		merchantCouponsAuth.GET("", couponH.ListMerchantCoupons)
+		merchantCouponsAuth.PATCH("/:id", couponH.UpdateMerchantCoupon)
+		merchantCouponsAuth.POST("/:id/activate", couponH.ActivateMerchantCoupon)
+		merchantCouponsAuth.POST("/:id/deactivate", couponH.DeactivateMerchantCoupon)
+	}
 }
