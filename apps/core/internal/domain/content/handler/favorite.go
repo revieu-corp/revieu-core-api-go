@@ -32,6 +32,7 @@ func NewFavoriteHandler(svc *service.ContentService) *FavoriteHandler {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/favorites [get]
 func (h *FavoriteHandler) ListMyFavorites(c *gin.Context) {
 	userID := c.GetInt64("user_id")

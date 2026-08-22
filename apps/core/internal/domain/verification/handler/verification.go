@@ -27,6 +27,7 @@ func NewVerificationHandler(svc *service.VerificationService) *VerificationHandl
 // @Produce json
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /merchant/verification [post]
 func (h *VerificationHandler) Submit(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -61,6 +62,7 @@ func (h *VerificationHandler) Submit(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /merchant/verification [get]
 func (h *VerificationHandler) Status(c *gin.Context) {
 	userID := c.GetInt64("user_id")

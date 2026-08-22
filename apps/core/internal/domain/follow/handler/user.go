@@ -28,6 +28,7 @@ func NewUserHandler(svc *service.FollowService) *UserHandler {
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /users/{id}/follow [post]
 func (h *UserHandler) FollowUser(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -53,6 +54,7 @@ func (h *UserHandler) FollowUser(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /users/{id}/follow [delete]
 func (h *UserHandler) UnfollowUser(c *gin.Context) {
 	userID := c.GetInt64("user_id")

@@ -82,6 +82,7 @@ func (h *ReviewHandler) ListUserReviews(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/reviews [get]
 func (h *ReviewHandler) ListMyReviews(c *gin.Context) {
 	userID := c.GetInt64("user_id")

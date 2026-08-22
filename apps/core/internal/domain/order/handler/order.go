@@ -30,6 +30,7 @@ func NewOrderHandler(svc *service.OrderService) *OrderHandler {
 // @Success 201 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /orders [post]
 func (h *OrderHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -61,6 +62,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /orders [get]
 func (h *OrderHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -86,6 +88,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 // @Failure 403 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /orders/{id} [get]
 func (h *OrderHandler) Detail(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -118,6 +121,7 @@ func (h *OrderHandler) Detail(c *gin.Context) {
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /orders/{id}/pay [post]
 func (h *OrderHandler) Pay(c *gin.Context) {
 	userID := c.GetInt64("user_id")

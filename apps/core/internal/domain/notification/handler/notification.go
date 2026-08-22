@@ -27,6 +27,7 @@ func NewNotificationHandler(svc *service.NotificationService) *NotificationHandl
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /notifications [get]
 func (h *NotificationHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -51,6 +52,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 // @Param id path int true "Notification ID"
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /notifications/{id}/read [patch]
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -84,6 +86,7 @@ func (h *NotificationHandler) MarkRead(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /notifications/read-all [post]
 func (h *NotificationHandler) ReadAll(c *gin.Context) {
 	userID := c.GetInt64("user_id")

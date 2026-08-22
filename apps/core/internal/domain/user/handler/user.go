@@ -36,6 +36,7 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 // @Success 200 {object} dto.ProfileResponse
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -58,6 +59,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/profile [patch]
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -81,6 +83,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 // @Success 200 {object} dto.PrivacySettings
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/privacy [get]
 func (h *UserHandler) GetPrivacy(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -103,6 +106,7 @@ func (h *UserHandler) GetPrivacy(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/privacy [patch]
 func (h *UserHandler) UpdatePrivacy(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -126,6 +130,7 @@ func (h *UserHandler) UpdatePrivacy(c *gin.Context) {
 // @Success 200 {object} dto.NotificationSettings
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/notifications [get]
 func (h *UserHandler) GetNotifications(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -148,6 +153,7 @@ func (h *UserHandler) GetNotifications(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/notifications [patch]
 func (h *UserHandler) UpdateNotifications(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -171,6 +177,7 @@ func (h *UserHandler) UpdateNotifications(c *gin.Context) {
 // @Success 200 {object} dto.AddressListResponse
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/addresses [get]
 func (h *UserHandler) ListAddresses(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -206,6 +213,7 @@ func (h *UserHandler) ListAddresses(c *gin.Context) {
 // @Success 201 {object} dto.AddressItem
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/addresses [post]
 func (h *UserHandler) CreateAddress(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -244,6 +252,7 @@ func (h *UserHandler) CreateAddress(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/addresses/{id} [patch]
 func (h *UserHandler) UpdateAddress(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -276,6 +285,7 @@ func (h *UserHandler) UpdateAddress(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/addresses/{id} [delete]
 func (h *UserHandler) DeleteAddress(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -302,6 +312,7 @@ func (h *UserHandler) DeleteAddress(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/addresses/{id}/default [post]
 func (h *UserHandler) SetDefaultAddress(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -327,6 +338,7 @@ func (h *UserHandler) SetDefaultAddress(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/following/users [get]
 func (h *UserHandler) ListFollowingUsers(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -358,6 +370,7 @@ func (h *UserHandler) ListFollowingUsers(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/following/merchants [get]
 func (h *UserHandler) ListFollowingMerchants(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -390,6 +403,7 @@ func (h *UserHandler) ListFollowingMerchants(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/followers [get]
 func (h *UserHandler) ListFollowers(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -418,6 +432,7 @@ func (h *UserHandler) ListFollowers(c *gin.Context) {
 // @Produce json
 // @Success 202 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/account/export [post]
 func (h *UserHandler) RequestAccountExport(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"status": "export queued"})
@@ -433,6 +448,7 @@ func (h *UserHandler) RequestAccountExport(c *gin.Context) {
 // @Success 202 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/account [delete]
 func (h *UserHandler) RequestAccountDeletion(c *gin.Context) {
 	userID := c.GetInt64("user_id")

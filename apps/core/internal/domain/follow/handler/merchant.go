@@ -28,6 +28,7 @@ func NewMerchantHandler(svc *service.FollowService) *MerchantHandler {
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /merchants/{id}/follow [post]
 func (h *MerchantHandler) FollowMerchant(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -53,6 +54,7 @@ func (h *MerchantHandler) FollowMerchant(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /merchants/{id}/follow [delete]
 func (h *MerchantHandler) UnfollowMerchant(c *gin.Context) {
 	userID := c.GetInt64("user_id")

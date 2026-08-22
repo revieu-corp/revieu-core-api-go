@@ -2,7 +2,7 @@
 
 - 文档来源：`apps/core/docs/swagger.json`
 - 文档用途：给协作开发者执行统一 API 回归测试
-- 覆盖范围：`94` 个 API 操作（method + path）
+- 覆盖范围：`108` 个 API 操作（method + path）
 - Base URL：`https://dev.revieu.weijun.online/api/v1`（可替换为本地）
 
 ## 通用约定
@@ -20,21 +20,22 @@
 - `category`：1 个接口
 - `content`：6 个接口
 - `conversation`：5 个接口
-- `coupon`：5 个接口
+- `coupon`：10 个接口
+- `dish`：6 个接口
 - `feed`：1 个接口
 - `follow`：4 个接口
 - `media`：3 个接口
-- `merchant`：3 个接口
+- `merchant`：4 个接口
 - `notification`：3 个接口
 - `order`：4 个接口
 - `package`：2 个接口
 - `payment`：2 个接口
 - `profile`：1 个接口
-- `review`：5 个接口
-- `store`：9 个接口
+- `review`：4 个接口
+- `store`：10 个接口
 - `user`：16 个接口
 - `verification`：2 个接口
-- `voucher`：9 个接口
+- `voucher`：11 个接口
 
 ---
 
@@ -44,7 +45,7 @@
 
 - 用例名称：List merchants for admin
 - 说明：Returns a list of merchants for admin management
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -81,7 +82,7 @@ GET /api/v1/admin/merchants
 
 - 用例名称：Update merchant status
 - 说明：Updates a merchant's status or verification
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -123,7 +124,7 @@ Content-Type: application/json
 
 - 用例名称：List reports
 - 说明：Returns a list of user reports for admin review
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -160,7 +161,7 @@ GET /api/v1/admin/reports
 
 - 用例名称：Update report
 - 说明：Updates a report status (approve/reject)
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -204,7 +205,7 @@ Content-Type: application/json
 
 - 用例名称：Get review suggestions
 - 说明：Generates AI suggestions for improving a review
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -664,7 +665,7 @@ GET /api/v1/categories
 
 - 用例名称：List my favorites
 - 说明：Returns favorites for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -755,7 +756,7 @@ Query 参数：
 
 - 用例名称：List my likes
 - 说明：Returns likes for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -804,7 +805,7 @@ Query 参数：
 
 - 用例名称：List my posts
 - 说明：Returns posts created by the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -876,7 +877,7 @@ Query 参数：
 
 - 用例名称：List my reviews
 - 说明：Returns reviews created by the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1106,7 +1107,7 @@ Query 参数：
 
 - 用例名称：List conversations
 - 说明：Returns conversations for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1143,7 +1144,7 @@ GET /api/v1/conversations
 
 - 用例名称：Create conversation
 - 说明：Creates a new conversation
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -1182,7 +1183,7 @@ Content-Type: application/json
 
 - 用例名称：Get conversation messages
 - 说明：Returns messages for a conversation
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1222,7 +1223,7 @@ GET /api/v1/conversations/1/messages
 
 - 用例名称：Send message
 - 说明：Sends a message in a conversation
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -1264,7 +1265,7 @@ Content-Type: application/json
 
 - 用例名称：Update conversation settings
 - 说明：Updates settings for a conversation (e.g. mute)
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -1358,7 +1359,7 @@ Body 示例：
 
 - 用例名称：Redeem coupon
 - 说明：Redeems a coupon for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1630,7 +1631,7 @@ GET /api/v1/feed/home
 
 - 用例名称：Follow merchant
 - 说明：Follow a merchant
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1678,7 +1679,7 @@ POST /api/v1/merchants/1/follow
 
 - 用例名称：Unfollow merchant
 - 说明：Unfollow a merchant
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1734,7 +1735,7 @@ DELETE /api/v1/merchants/1/follow
 
 - 用例名称：Follow user
 - 说明：Follow a user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1782,7 +1783,7 @@ POST /api/v1/users/1/follow
 
 - 用例名称：Unfollow user
 - 说明：Unfollow a user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1840,7 +1841,7 @@ DELETE /api/v1/users/1/follow
 
 - 用例名称：Create presigned URLs for media upload
 - 说明：Generates presigned URLs for uploading files directly to R2 storage
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -1915,7 +1916,7 @@ Body 示例：
 
 - 用例名称：Create media upload
 - 说明：Creates a media upload and returns upload URLs
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -1960,7 +1961,7 @@ POST /api/v1/media/uploads
 
 - 用例名称：Analyze media upload
 - 说明：Triggers analysis for a media upload
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2166,7 +2167,7 @@ GET /api/v1/merchants/1/reviews
 
 - 用例名称：List notifications
 - 说明：Returns notifications for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2203,7 +2204,7 @@ GET /api/v1/notifications
 
 - 用例名称：Mark all notifications as read
 - 说明：Marks all notifications as read for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2240,7 +2241,7 @@ POST /api/v1/notifications/read-all
 
 - 用例名称：Mark notification as read
 - 说明：Marks a single notification as read
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2282,7 +2283,7 @@ PATCH /api/v1/notifications/1/read
 
 - 用例名称：List orders
 - 说明：Returns orders for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2327,7 +2328,7 @@ GET /api/v1/orders
 
 - 用例名称：Create order
 - 说明：Creates a new order for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -2383,7 +2384,7 @@ Body 示例：
 
 - 用例名称：Get order detail
 - 说明：Returns an order by ID
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2439,7 +2440,7 @@ GET /api/v1/orders/1
 
 - 用例名称：Pay order
 - 说明：Simulates payment success for an order and issues vouchers
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2576,7 +2577,7 @@ GET /api/v1/packages/1
 
 - 用例名称：Create payment
 - 说明：Creates a payment record
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -2633,7 +2634,7 @@ Body 示例：
 
 - 用例名称：Get payment detail
 - 说明：Returns a payment by ID
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -2759,7 +2760,7 @@ GET /api/v1/users/1
 
 - 用例名称：Create a review
 - 说明：Creates a new review for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -2932,7 +2933,7 @@ GET /api/v1/reviews/1
 
 - 用例名称：Add a review comment
 - 说明：Adds a comment to a review
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -2990,7 +2991,7 @@ Body 示例：
 
 - 用例名称：Like a review
 - 说明：Likes a review for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -3638,7 +3639,7 @@ Query 参数：
 
 - 用例名称：Request account deletion
 - 说明：Schedules account deletion (cooling period)
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -3693,7 +3694,7 @@ Body 示例：
 
 - 用例名称：Request account export
 - 说明：Queues a user data export
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -3730,7 +3731,7 @@ POST /api/v1/user/account/export
 
 - 用例名称：List addresses
 - 说明：Returns the authenticated user's saved addresses
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -3787,7 +3788,7 @@ GET /api/v1/user/addresses
 
 - 用例名称：Create address
 - 说明：Adds a new address for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -3857,7 +3858,7 @@ Body 示例：
 
 - 用例名称：Update address
 - 说明：Updates an existing address
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -3930,7 +3931,7 @@ Body 示例：
 
 - 用例名称：Delete address
 - 说明：Deletes an address
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -3986,7 +3987,7 @@ DELETE /api/v1/user/addresses/1
 
 - 用例名称：Set default address
 - 说明：Sets an address as default
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4042,7 +4043,7 @@ POST /api/v1/user/addresses/1/default
 
 - 用例名称：List followers
 - 说明：Returns followers of the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4091,7 +4092,7 @@ Query 参数：
 
 - 用例名称：List following merchants
 - 说明：Returns merchants the authenticated user follows
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4140,7 +4141,7 @@ Query 参数：
 
 - 用例名称：List following users
 - 说明：Returns users the authenticated user follows
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4189,7 +4190,7 @@ Query 参数：
 
 - 用例名称：Get notification settings
 - 说明：Returns the authenticated user's notification settings
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4235,7 +4236,7 @@ GET /api/v1/user/notifications
 
 - 用例名称：Update notification settings
 - 说明：Updates the authenticated user's notification settings
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -4299,7 +4300,7 @@ Body 示例：
 
 - 用例名称：Get privacy settings
 - 说明：Returns the authenticated user's privacy settings
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4344,7 +4345,7 @@ GET /api/v1/user/privacy
 
 - 用例名称：Update privacy settings
 - 说明：Updates the authenticated user's privacy settings
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -4407,7 +4408,7 @@ Body 示例：
 
 - 用例名称：Get current user profile
 - 说明：Returns the authenticated user's profile
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4456,7 +4457,7 @@ GET /api/v1/user/profile
 
 - 用例名称：Update current user profile
 - 说明：Updates nickname, avatar, intro, or location
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -4524,7 +4525,7 @@ Body 示例：
 
 - 用例名称：Get verification status
 - 说明：Returns the verification status for the authenticated merchant
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4561,7 +4562,7 @@ GET /api/v1/merchant/verification
 
 - 用例名称：Submit merchant verification
 - 说明：Submits verification documents for the authenticated merchant
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -4668,7 +4669,7 @@ Authorization: Bearer <ACCESS_TOKEN>
 
 - 用例名称：List vouchers
 - 说明：Returns vouchers for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4713,7 +4714,7 @@ GET /api/v1/vouchers
 
 - 用例名称：Create voucher
 - 说明：Creates a voucher for the authenticated user
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 请求 Content-Type：`application/json`
 - 响应 Content-Type：`application/json`
 
@@ -4770,7 +4771,7 @@ Body 示例：
 
 - 用例名称：Get voucher by code
 - 说明：Returns a voucher by code
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4818,7 +4819,7 @@ GET /api/v1/vouchers/code/sample-code
 
 - 用例名称：Share voucher via email
 - 说明：Sends voucher share email
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4855,7 +4856,7 @@ POST /api/v1/vouchers/share/email
 
 - 用例名称：Share voucher via SMS
 - 说明：Sends voucher share SMS
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4892,7 +4893,7 @@ POST /api/v1/vouchers/share/sms
 
 - 用例名称：Get voucher detail
 - 说明：Returns a voucher by ID
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4948,7 +4949,7 @@ GET /api/v1/vouchers/1
 
 - 用例名称：Update voucher status
 - 说明：Updates voucher status to used
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -4996,7 +4997,7 @@ PATCH /api/v1/vouchers/1/status
 
 - 用例名称：Use voucher
 - 说明：Marks a voucher as used
-- 鉴权：不需要
+- 鉴权：需要 Bearer Token
 - 响应 Content-Type：`application/json`
 
 **请求示例**
@@ -5099,3 +5100,348 @@ SELECT id, user_id, (deleted_at IS NOT NULL) AS soft_deleted FROM merchants WHER
 
 - 当前数据库约束是 `merchants.user_id -> users.id ON DELETE SET NULL`。
 - 当前行为不是 `user` 级联删除商家链路，需要通过业务逻辑补齐“用户删除时的 merchant/store/coupon 软删除”。
+
+---
+
+## 补充覆盖：Swagger 中此前遗漏的 15 个操作
+
+以下用例补齐了当前 `apps/core/docs/swagger.json` 中存在、旧手册未列出的操作。计数基准为 2026-08-22 生成的 Swagger：共 `108` 个 method + path 操作。除 `DELETE /merchant/me` 明确为占位接口并预期返回 `501` 外，其余操作均应按成功和失败分支执行。
+
+### TC-095 `DELETE /merchant/dishes/{id}`
+
+- 用例名称：Delete my dish
+- 说明：Soft-deletes an owned dish
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+DELETE /api/v1/merchant/dishes/1
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"status":"ok"}`
+- HTTP `400`：无效 dish ID
+- HTTP `401`：未登录
+- HTTP `403`：dish 不属于当前商户
+- HTTP `404`：dish 不存在
+- HTTP `500`：服务端错误
+
+### TC-096 `DELETE /merchant/me`
+
+- 用例名称：Delete current merchant placeholder
+- 说明：当前实现是占位接口，不应被误判为已完成的商户删除能力
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+DELETE /api/v1/merchant/me
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `401`：未登录
+- HTTP `501`：`{"error":"not implemented"}`；若返回 `2xx`，应另开实现缺口 Issue
+
+### TC-097 `DELETE /merchant/stores/{id}`
+
+- 用例名称：Delete a store
+- 说明：软删除当前商户拥有的门店及其绑定优惠券
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+DELETE /api/v1/merchant/stores/1
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"status":"ok"}`
+- HTTP `400`：无效 store ID
+- HTTP `401`：未登录
+- HTTP `403`：门店不属于当前商户
+- HTTP `404`：门店不存在
+- HTTP `500`：服务端错误
+
+### TC-098 `DELETE /merchant/stores/{id}/coupons/{couponId}`
+
+- 用例名称：Delete store coupon
+- 说明：软删除当前商户门店下的优惠券
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+DELETE /api/v1/merchant/stores/1/coupons/1
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"status":"ok"}`
+- HTTP `400`：无效 store/coupon ID
+- HTTP `401`：未登录
+- HTTP `403`：资源不属于当前商户
+- HTTP `404`：资源不存在
+- HTTP `500`：服务端错误
+
+### TC-099 `GET /merchant/dishes`
+
+- 用例名称：List my dishes
+- 说明：返回当前认证商户拥有的菜品
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+GET /api/v1/merchant/dishes
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":[]}` 或包含菜品对象的 `data` 数组
+- HTTP `401`：未登录
+- HTTP `500`：服务端错误
+
+### TC-100 `GET /merchant/stores/{id}/coupons`
+
+- 用例名称：List my store coupons
+- 说明：返回当前商户门店下的草稿、禁用和过期优惠券
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+GET /api/v1/merchant/stores/1/coupons
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":[]}` 或包含优惠券对象的 `data` 数组
+- HTTP `400`：无效 store ID
+- HTTP `401`：未登录
+- HTTP `403`：门店不属于当前商户
+- HTTP `404`：门店不存在
+
+### TC-101 `GET /merchant/vouchers/scan`
+
+- 用例名称：Preview voucher redemption by scan token
+- 说明：使用扫码 token 预览核销结果，不应改变核销状态
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+GET /api/v1/merchant/vouchers/scan?t=demo-scan-token
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：返回 `RedeemPreview`，至少包含 `can_redeem`、`voucher_id`、`voucher_status` 等字段
+- HTTP `400`：缺少或无效 scan token
+- HTTP `401`：未登录
+- HTTP `403`：商户无权核销该券
+- HTTP `404`：券不存在
+
+### TC-102 `PATCH /merchant/dishes/{id}`
+
+- 用例名称：Update my dish
+- 说明：更新当前商户拥有的菜品
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+PATCH /api/v1/merchant/dishes/1
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{"name":"Updated dish","original_price":8.99}
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：请求体或 dish ID 无效
+- HTTP `401`：未登录
+- HTTP `403`：dish 不属于当前商户
+- HTTP `404`：dish 不存在
+- HTTP `500`：服务端错误
+
+### TC-103 `PATCH /merchant/stores/{id}/coupons/{couponId}`
+
+- 用例名称：Update store coupon
+- 说明：更新当前商户门店下的优惠券
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+PATCH /api/v1/merchant/stores/1/coupons/1
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{"title":"Updated coupon","price":8.99,"status":"active"}
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：请求体或 ID 无效
+- HTTP `401`：未登录
+- HTTP `403`：资源不属于当前商户
+- HTTP `404`：资源不存在
+
+### TC-104 `POST /merchant/dishes`
+
+- 用例名称：Create dish
+- 说明：为当前商户创建菜品
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/dishes
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{"name":"Demo dish","description":"Demo item","original_price":8.99,"category":"main"}
+```
+
+**期望响应**
+
+- HTTP `201`：`{"data":{...}}`
+- HTTP `400`：请求体无效
+- HTTP `401`：未登录
+- HTTP `403/404`：关联资源无权或不存在
+- HTTP `500`：服务端错误
+
+### TC-105 `POST /merchant/dishes/{id}/disable`
+
+- 用例名称：Disable dish
+- 说明：将当前商户菜品设置为禁用
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/dishes/1/disable
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：无效 dish ID
+- HTTP `401`：未登录
+- HTTP `403`：dish 不属于当前商户
+- HTTP `404`：dish 不存在
+- HTTP `500`：服务端错误
+
+### TC-106 `POST /merchant/dishes/{id}/enable`
+
+- 用例名称：Enable dish
+- 说明：将当前商户菜品设置为启用
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/dishes/1/enable
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：无效 dish ID
+- HTTP `401`：未登录
+- HTTP `403`：dish 不属于当前商户
+- HTTP `404`：dish 不存在
+- HTTP `500`：服务端错误
+
+### TC-107 `POST /merchant/stores/{id}/coupons/{couponId}/disable`
+
+- 用例名称：Disable store coupon
+- 说明：将门店优惠券设置为禁用
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/stores/1/coupons/1/disable
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：无效 ID
+- HTTP `401`：未登录
+- HTTP `403`：资源不属于当前商户
+- HTTP `404`：资源不存在
+- HTTP `500`：服务端错误
+
+### TC-108 `POST /merchant/stores/{id}/coupons/{couponId}/enable`
+
+- 用例名称：Enable store coupon
+- 说明：将门店优惠券设置为启用
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/stores/1/coupons/1/enable
+Authorization: Bearer <ACCESS_TOKEN>
+```
+
+**期望响应**
+
+- HTTP `200`：`{"data":{...}}`
+- HTTP `400`：无效 ID
+- HTTP `401`：未登录
+- HTTP `403`：资源不属于当前商户
+- HTTP `404`：资源不存在
+- HTTP `500`：服务端错误
+
+### TC-109 `POST /merchant/vouchers/redeem-by-token`
+
+- 用例名称：Redeem voucher by scan token
+- 说明：使用扫码 token 核销优惠券并改变核销状态
+- 鉴权：需要 `Authorization: Bearer <ACCESS_TOKEN>`
+
+**请求示例**
+
+```http
+POST /api/v1/merchant/vouchers/redeem-by-token
+Authorization: Bearer <ACCESS_TOKEN>
+Content-Type: application/json
+
+{"scan_token":"demo-scan-token"}
+```
+
+**期望响应**
+
+- HTTP `200`：`{"status":"ok"}` 或当前实现定义的成功对象
+- HTTP `400`：请求体或 scan token 无效
+- HTTP `401`：未登录
+- HTTP `403`：商户无权核销该券
+- HTTP `404`：券不存在
+
+### 计数与执行校验
+
+```bash
+jq '[.paths | to_entries[] | .value | to_entries[] | select(.key|IN("get","post","put","patch","delete"))] | length' apps/core/docs/swagger.json
+rg -c '^### TC-' docs/testing/all-api-test-cases-v1.md
+```
+
+两条命令均应返回 `108`。如 Swagger 生成后操作数变化，应先更新本手册计数和补充用例，再宣称全量覆盖。

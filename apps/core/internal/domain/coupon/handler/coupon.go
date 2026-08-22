@@ -200,6 +200,7 @@ func (h *CouponHandler) DeleteStoreCoupon(c *gin.Context) {
 // @Tags coupon
 // @Produce json
 // @Param id path int true "Store ID"
+// @Failure 400 {object} map[string]string
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]string
 // @Router /stores/{id}/coupons [get]
@@ -272,6 +273,7 @@ func parseStoreAndCouponID(c *gin.Context) (int64, int64, bool) {
 // @Produce json
 // @Param id path int true "Store ID"
 // @Param couponId path int true "Coupon ID"
+// @Param request body UpdateStoreCouponRequest true "Update store coupon request"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
@@ -340,6 +342,14 @@ func (h *CouponHandler) setStoreCouponEnabled(c *gin.Context, enabled bool) {
 // @Summary Enable store coupon
 // @Tags coupon
 // @Produce json
+// @Param id path int true "Store ID"
+// @Param couponId path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/stores/{id}/coupons/{couponId}/enable [post]
 func (h *CouponHandler) EnableStoreCoupon(c *gin.Context) { h.setStoreCouponEnabled(c, true) }
@@ -348,6 +358,14 @@ func (h *CouponHandler) EnableStoreCoupon(c *gin.Context) { h.setStoreCouponEnab
 // @Summary Disable store coupon
 // @Tags coupon
 // @Produce json
+// @Param id path int true "Store ID"
+// @Param couponId path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/stores/{id}/coupons/{couponId}/disable [post]
 func (h *CouponHandler) DisableStoreCoupon(c *gin.Context) { h.setStoreCouponEnabled(c, false) }
@@ -424,6 +442,7 @@ func (h *CouponHandler) InitiatePayment(c *gin.Context) {
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /coupons/{id}/redeem [post]
 func (h *CouponHandler) Redeem(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

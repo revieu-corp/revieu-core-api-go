@@ -54,6 +54,13 @@ func dishErrorStatus(err error) (int, string) {
 // @Tags dish
 // @Accept json
 // @Produce json
+// @Param request body UpsertDishRequest true "Create dish request"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes [post]
 func (h *DishHandler) Create(c *gin.Context) {
@@ -83,6 +90,9 @@ func (h *DishHandler) Create(c *gin.Context) {
 // @Summary List my dishes
 // @Tags dish
 // @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes [get]
 func (h *DishHandler) ListMine(c *gin.Context) {
@@ -114,6 +124,14 @@ func parseDishID(c *gin.Context) (int64, bool) {
 // @Tags dish
 // @Accept json
 // @Produce json
+// @Param id path int true "Dish ID"
+// @Param request body UpdateDishRequest true "Update dish request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes/{id} [patch]
 func (h *DishHandler) Update(c *gin.Context) {
@@ -147,6 +165,13 @@ func (h *DishHandler) Update(c *gin.Context) {
 // @Summary Delete dish
 // @Tags dish
 // @Produce json
+// @Param id path int true "Dish ID"
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes/{id} [delete]
 func (h *DishHandler) Delete(c *gin.Context) {
@@ -190,6 +215,13 @@ func (h *DishHandler) setStatus(c *gin.Context, targetStatus string) {
 // @Summary Enable dish
 // @Tags dish
 // @Produce json
+// @Param id path int true "Dish ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes/{id}/enable [post]
 func (h *DishHandler) Enable(c *gin.Context) { h.setStatus(c, service.DishStatusActive) }
@@ -198,6 +230,13 @@ func (h *DishHandler) Enable(c *gin.Context) { h.setStatus(c, service.DishStatus
 // @Summary Disable dish
 // @Tags dish
 // @Produce json
+// @Param id path int true "Dish ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/dishes/{id}/disable [post]
 func (h *DishHandler) Disable(c *gin.Context) { h.setStatus(c, service.DishStatusDisabled) }

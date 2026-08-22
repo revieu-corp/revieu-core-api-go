@@ -40,6 +40,7 @@ func NewVoucherHandler(svc *service.VoucherService, frontendURL string) *Voucher
 // @Success 201 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers [post]
 func (h *VoucherHandler) Create(c *gin.Context) {
 	var req service.CreateVoucherRequest
@@ -63,6 +64,7 @@ func (h *VoucherHandler) Create(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers [get]
 func (h *VoucherHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -84,6 +86,7 @@ func (h *VoucherHandler) List(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/{id} [get]
 func (h *VoucherHandler) Detail(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -114,6 +117,7 @@ func (h *VoucherHandler) Detail(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/code/{code} [get]
 func (h *VoucherHandler) ByCode(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -139,6 +143,7 @@ func (h *VoucherHandler) ByCode(c *gin.Context) {
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/{id}/use [patch]
 func (h *VoucherHandler) Use(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -162,6 +167,7 @@ func (h *VoucherHandler) Use(c *gin.Context) {
 // @Success 200 {object} map[string]string
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/{id}/status [patch]
 func (h *VoucherHandler) UpdateStatus(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -183,6 +189,7 @@ func (h *VoucherHandler) UpdateStatus(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/share/email [post]
 func (h *VoucherHandler) ShareEmail(c *gin.Context) { c.JSON(http.StatusOK, gin.H{}) }
 
@@ -193,6 +200,7 @@ func (h *VoucherHandler) ShareEmail(c *gin.Context) { c.JSON(http.StatusOK, gin.
 // @Produce json
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /vouchers/share/sms [post]
 func (h *VoucherHandler) ShareSMS(c *gin.Context) { c.JSON(http.StatusOK, gin.H{}) }
 

@@ -5,7 +5,7 @@
 
 ## 覆盖声明
 - 数据源：`apps/core/docs/swagger.json`
-- 覆盖数量：`94` 个 API 操作（method + path）
+- 覆盖数量：`108` 个 API 操作（method + path）
 - 覆盖范围：OpenAPI v1 当前全部已登记接口
 
 ## 测试环境

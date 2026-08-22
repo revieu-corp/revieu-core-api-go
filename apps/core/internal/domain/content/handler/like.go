@@ -28,6 +28,7 @@ func NewLikeHandler(svc *service.ContentService) *LikeHandler {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /user/likes [get]
 func (h *LikeHandler) ListMyLikes(c *gin.Context) {
 	userID := c.GetInt64("user_id")

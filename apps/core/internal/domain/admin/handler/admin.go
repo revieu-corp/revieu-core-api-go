@@ -25,6 +25,7 @@ func NewAdminHandler(svc *service.AdminService) *AdminHandler {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /admin/reports [get]
 func (h *AdminHandler) ListReports(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
@@ -39,6 +40,7 @@ func (h *AdminHandler) ListReports(c *gin.Context) {
 // @Param id path int true "Report ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /admin/reports/{id} [patch]
 func (h *AdminHandler) UpdateReport(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
@@ -51,6 +53,7 @@ func (h *AdminHandler) UpdateReport(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /admin/merchants [get]
 func (h *AdminHandler) ListMerchants(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})
@@ -65,6 +68,7 @@ func (h *AdminHandler) ListMerchants(c *gin.Context) {
 // @Param id path int true "Merchant ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /admin/merchants/{id} [patch]
 func (h *AdminHandler) UpdateMerchant(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "not implemented"})

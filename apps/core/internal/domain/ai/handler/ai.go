@@ -70,6 +70,7 @@ func NewAIHandler(svc *service.AIService, cfg config.GeminiConfig) *AIHandler {
 // @Failure 422 {object} map[string]string
 // @Failure 429 {object} map[string]string
 // @Failure 502 {object} map[string]string
+// @Security BearerAuth
 // @Router /ai/reviews/suggestions [post]
 func (h *AIHandler) Suggestions(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)

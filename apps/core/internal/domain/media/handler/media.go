@@ -29,6 +29,7 @@ func NewMediaHandler(svc *service.MediaService) *MediaHandler {
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /media/uploads [post]
 func (h *MediaHandler) CreateUpload(c *gin.Context) {
 	upload, err := h.svc.CreateUpload(c.Request.Context())
@@ -49,6 +50,7 @@ func (h *MediaHandler) CreateUpload(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Security BearerAuth
 // @Router /media/{id}/analysis [post]
 func (h *MediaHandler) Analyze(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -74,6 +76,7 @@ func (h *MediaHandler) Analyze(c *gin.Context) {
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Security BearerAuth
 // @Router /media/presigned-urls [post]
 func (h *MediaHandler) CreatePresignedURLs(c *gin.Context) {
 	userID, exists := c.Get("user_id")

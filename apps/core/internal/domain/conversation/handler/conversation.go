@@ -27,6 +27,7 @@ func NewConversationHandler(svc *service.ConversationService) *ConversationHandl
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /conversations [get]
 func (h *ConversationHandler) List(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -51,6 +52,7 @@ func (h *ConversationHandler) List(c *gin.Context) {
 // @Produce json
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /conversations [post]
 func (h *ConversationHandler) Create(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -85,6 +87,7 @@ func (h *ConversationHandler) Create(c *gin.Context) {
 // @Param id path int true "Conversation ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /conversations/{id}/messages [get]
 func (h *ConversationHandler) Messages(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -122,6 +125,7 @@ func (h *ConversationHandler) Messages(c *gin.Context) {
 // @Param id path int true "Conversation ID"
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /conversations/{id}/messages [post]
 func (h *ConversationHandler) SendMessage(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -166,6 +170,7 @@ func (h *ConversationHandler) SendMessage(c *gin.Context) {
 // @Param id path int true "Conversation ID"
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Security BearerAuth
 // @Router /conversations/{id}/settings [patch]
 func (h *ConversationHandler) UpdateSettings(c *gin.Context) {
 	userID := c.GetInt64("user_id")
