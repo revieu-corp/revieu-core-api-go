@@ -34,17 +34,17 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	// Authenticated: merchant store and coupon management
 	merchantStoresAuth := r.Group("/merchant/stores", authorization.JWTAuth(cfg.JWT))
 	{
-		merchantStoresAuth.GET("", storeH.ListMine)
+		merchantStoresAuth.GET("", authorization.MerchantAccount(), storeH.ListMine)
 		merchantStoresAuth.POST("", storeH.Create)
-		merchantStoresAuth.POST("/:id/activate", storeH.Activate)
-		merchantStoresAuth.POST("/:id/deactivate", storeH.Deactivate)
-		merchantStoresAuth.PATCH("/:id", storeH.Update)
-		merchantStoresAuth.DELETE("/:id", storeH.Delete)
-		merchantStoresAuth.POST("/:id/coupons", couponH.CreateStoreCoupon)
-		merchantStoresAuth.GET("/:id/coupons", couponH.ListMineForStore)
-		merchantStoresAuth.PATCH("/:id/coupons/:couponId", couponH.UpdateStoreCoupon)
-		merchantStoresAuth.POST("/:id/coupons/:couponId/enable", couponH.EnableStoreCoupon)
-		merchantStoresAuth.POST("/:id/coupons/:couponId/disable", couponH.DisableStoreCoupon)
-		merchantStoresAuth.DELETE("/:id/coupons/:couponId", couponH.DeleteStoreCoupon)
+		merchantStoresAuth.POST("/:id/activate", authorization.VerifiedMerchant(), storeH.Activate)
+		merchantStoresAuth.POST("/:id/deactivate", authorization.MerchantAccount(), storeH.Deactivate)
+		merchantStoresAuth.PATCH("/:id", authorization.MerchantAccount(), storeH.Update)
+		merchantStoresAuth.DELETE("/:id", authorization.MerchantAccount(), storeH.Delete)
+		merchantStoresAuth.POST("/:id/coupons", authorization.VerifiedMerchant(), couponH.CreateStoreCoupon)
+		merchantStoresAuth.GET("/:id/coupons", authorization.MerchantAccount(), couponH.ListMineForStore)
+		merchantStoresAuth.PATCH("/:id/coupons/:couponId", authorization.VerifiedMerchant(), couponH.UpdateStoreCoupon)
+		merchantStoresAuth.POST("/:id/coupons/:couponId/enable", authorization.VerifiedMerchant(), couponH.EnableStoreCoupon)
+		merchantStoresAuth.POST("/:id/coupons/:couponId/disable", authorization.VerifiedMerchant(), couponH.DisableStoreCoupon)
+		merchantStoresAuth.DELETE("/:id/coupons/:couponId", authorization.VerifiedMerchant(), couponH.DeleteStoreCoupon)
 	}
 }

@@ -27,8 +27,8 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 
 	merchantVouchers := r.Group("/merchant/vouchers", authorization.JWTAuth(cfg.JWT))
 	{
-		merchantVouchers.GET("/scan", h.ScanPreview)
-		merchantVouchers.POST("/redeem-by-token", h.RedeemByToken)
-		merchantVouchers.POST("/:id/redeem", h.RedeemByMerchant)
+		merchantVouchers.GET("/scan", authorization.VerifiedMerchant(), h.ScanPreview)
+		merchantVouchers.POST("/redeem-by-token", authorization.VerifiedMerchant(), h.RedeemByToken)
+		merchantVouchers.POST("/:id/redeem", authorization.VerifiedMerchant(), h.RedeemByMerchant)
 	}
 }

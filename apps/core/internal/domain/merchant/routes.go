@@ -17,6 +17,6 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	// Authenticated: current merchant's account
 	merchantPrivate := r.Group("/merchant", authorization.JWTAuth(cfg.JWT))
 	{
-		merchantPrivate.DELETE("/me", h.DeleteMe)
+		merchantPrivate.DELETE("/me", authorization.MerchantAccount(), h.DeleteMe)
 	}
 }

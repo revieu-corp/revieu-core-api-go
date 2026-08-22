@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/testutil"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/token"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/gin-gonic/gin"
 )
 
 func setupAPITest(t *testing.T) (*gin.Engine, string) {
@@ -210,6 +210,7 @@ func TestMerchantReviewsReturnsNotFoundWhenMerchantMissingOrNotPublic(t *testing
 
 func TestStoreCreateActivateAndPublicVisibility(t *testing.T) {
 	r, tok := setupAPITest(t)
+	db := database.DB
 
 	createBody := strings.NewReader(`{"name":"Draft Store","address":"Austin"}`)
 	w := httptest.NewRecorder()
@@ -229,6 +230,9 @@ func TestStoreCreateActivateAndPublicVisibility(t *testing.T) {
 	}
 	if created.Data.Status != 0 {
 		t.Fatalf("expected created store status 0(draft), got %d", created.Data.Status)
+	}
+	if err := db.Model(&model.Merchant{}).Where("id = ?", created.Data.MerchantID).Update("verification_status", "verified").Error; err != nil {
+		t.Fatalf("failed to approve merchant fixture: %v", err)
 	}
 
 	w = httptest.NewRecorder()
@@ -367,6 +371,9 @@ func TestStoreCreateWithCategoriesReflectedInCategoryFilter(t *testing.T) {
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatalf("failed to decode create response: %v", err)
+	}
+	if err := db.Model(&model.Merchant{}).Where("id = ?", created.Data.MerchantID).Update("verification_status", "verified").Error; err != nil {
+		t.Fatalf("failed to approve merchant fixture: %v", err)
 	}
 
 	w = httptest.NewRecorder()
@@ -999,7 +1006,7 @@ func TestStoreCouponCreateListAndValidate(t *testing.T) {
 	}
 	ownerID := ownerAuth.UserID
 
-	merchant := model.Merchant{Name: "Owner Merchant", UserID: &ownerID}
+	merchant := model.Merchant{Name: "Owner Merchant", UserID: &ownerID, VerificationStatus: "verified"}
 	if err := db.Create(&merchant).Error; err != nil {
 		t.Fatalf("failed to create merchant: %v", err)
 	}
@@ -1067,7 +1074,7 @@ func TestCouponOrderPayAndMerchantRedeemFlow(t *testing.T) {
 	}
 	ownerID := ownerAuth.UserID
 
-	merchant := model.Merchant{Name: "Owner Merchant", UserID: &ownerID}
+	merchant := model.Merchant{Name: "Owner Merchant", UserID: &ownerID, VerificationStatus: "verified"}
 	if err := db.Create(&merchant).Error; err != nil {
 		t.Fatalf("failed to create merchant: %v", err)
 	}
@@ -1401,7 +1408,7 @@ func TestMerchantVoucherScanPreviewFlow(t *testing.T) {
 		t.Fatalf("failed to create buyer: %v", err)
 	}
 
-	merchant := model.Merchant{Name: "Preview Flow Merchant", UserID: &merchantOwner.ID}
+	merchant := model.Merchant{Name: "Preview Flow Merchant", UserID: &merchantOwner.ID, VerificationStatus: "verified"}
 	if err := db.Create(&merchant).Error; err != nil {
 		t.Fatalf("failed to create merchant: %v", err)
 	}
@@ -1471,7 +1478,7 @@ func TestMerchantVoucherPreviewThenRedeemByTokenFlow(t *testing.T) {
 		t.Fatalf("failed to create buyer: %v", err)
 	}
 
-	merchant := model.Merchant{Name: "Redeem Token Flow Merchant", UserID: &merchantOwner.ID}
+	merchant := model.Merchant{Name: "Redeem Token Flow Merchant", UserID: &merchantOwner.ID, VerificationStatus: "verified"}
 	if err := db.Create(&merchant).Error; err != nil {
 		t.Fatalf("failed to create merchant: %v", err)
 	}
