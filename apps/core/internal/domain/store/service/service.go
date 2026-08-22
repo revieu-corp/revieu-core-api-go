@@ -262,7 +262,7 @@ func (s *StoreService) ReviewsPublished(ctx context.Context, storeID int64) ([]m
 	}
 	var reviews []model.Review
 	if err := s.db.WithContext(ctx).
-		Where("store_id = ?", storeID).
+		Where("store_id = ? AND status = ?", storeID, 0).
 		Order("id desc").
 		Find(&reviews).Error; err != nil {
 		return nil, err
@@ -281,7 +281,7 @@ func (s *StoreService) ReviewsPublishedPaginated(ctx context.Context, storeID in
 		Model(&model.Review{}).
 		Preload("User").
 		Preload("User.Profile").
-		Where("store_id = ?", storeID)
+		Where("store_id = ? AND status = ?", storeID, 0)
 
 	if query.Cursor != nil {
 		dbQuery = dbQuery.Where("reviews.id < ?", *query.Cursor)

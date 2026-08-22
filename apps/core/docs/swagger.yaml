@@ -110,6 +110,38 @@ definitions:
     required:
     - text
     type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReplyRequest:
+    properties:
+      text:
+        maxLength: 500
+        type: string
+    required:
+    - text
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReview:
+    properties:
+      customerName:
+        type: string
+      date:
+        type: string
+      hasReply:
+        type: boolean
+      id:
+        type: integer
+      rating:
+        type: number
+      replyText:
+        type: string
+      text:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReviewListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReview'
+        type: array
+    type: object
   github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.Review:
     properties:
       businessImage:
@@ -1418,6 +1450,139 @@ paths:
       summary: Delete current merchant (placeholder)
       tags:
       - merchant
+  /merchant/reviews:
+    get:
+      description: Returns active reviews belonging to the authenticated merchant
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReviewListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List current merchant reviews
+      tags:
+      - merchant-review
+  /merchant/reviews/{id}:
+    delete:
+      description: Archives an active review owned by the authenticated merchant
+      parameters:
+      - description: Review ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Archive a merchant review
+      tags:
+      - merchant-review
+  /merchant/reviews/{id}/reply:
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates the authenticated merchant's reply to a review
+      parameters:
+      - description: Review ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reply request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReplyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_review_dto.MerchantReview'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reply to a merchant review
+      tags:
+      - merchant-review
   /merchant/stores:
     get:
       description: Returns stores owned by the authenticated merchant user

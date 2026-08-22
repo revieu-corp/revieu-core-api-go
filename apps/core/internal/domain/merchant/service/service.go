@@ -54,7 +54,7 @@ func (s *MerchantService) Reviews(ctx context.Context, merchantID int64) ([]mode
 		return nil, err
 	}
 	var reviews []model.Review
-	if err := s.db.WithContext(ctx).Where("merchant_id = ?", merchantID).Order("id desc").Find(&reviews).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("merchant_id = ? AND status = ?", merchantID, 0).Order("id desc").Find(&reviews).Error; err != nil {
 		return nil, err
 	}
 	return reviews, nil
