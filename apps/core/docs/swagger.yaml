@@ -992,10 +992,21 @@ paths:
       produces:
       - application/json
       responses:
+        "200":
+          description: Existing direct conversation
+          schema:
+            additionalProperties: true
+            type: object
         "201":
           description: Created
           schema:
             additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "401":
           description: Unauthorized

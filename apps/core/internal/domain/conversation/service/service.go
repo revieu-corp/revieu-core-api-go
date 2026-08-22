@@ -56,6 +56,7 @@ type UpdateConversationSettingsInput struct {
 var ErrConversationNotFound = errors.New("conversation not found")
 var ErrConversationForbidden = errors.New("conversation forbidden")
 var ErrConversationInvalidInput = errors.New("conversation invalid input")
+var ErrConversationAlreadyExists = errors.New("conversation already exists")
 
 func NewConversationService(db *gorm.DB) *ConversationService {
 	if db == nil {
@@ -106,28 +107,53 @@ func (s *ConversationService) List(ctx context.Context, userID int64) ([]Convers
 
 func (s *ConversationService) Create(ctx context.Context, userID int64, input CreateConversationInput) (*ConversationSummary, error) {
 	title := strings.TrimSpace(input.Title)
-	if title == "" {
+	conversationType := strings.ToLower(strings.TrimSpace(input.Type))
+	if title == "" || len(input.ParticipantIDs) == 0 {
 		return nil, ErrConversationInvalidInput
 	}
-
-	conversationType := strings.TrimSpace(input.Type)
 	if conversationType == "" {
 		conversationType = "group"
 	}
+	if conversationType != "direct" && conversationType != "group" {
+		return nil, ErrConversationInvalidInput
+	}
+	if conversationType == "direct" && len(input.ParticipantIDs) != 1 {
+		return nil, ErrConversationInvalidInput
+	}
 
-	participantIDs := uniqueParticipantIDs(append(input.ParticipantIDs, userID))
+	participantIDs, err := validateParticipantIDs(userID, input.ParticipantIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	conversation := model.Conversation{
 		Type:  conversationType,
 		Title: title,
 	}
 
+	var existingConversation *model.Conversation
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := validateActiveParticipants(tx, participantIDs); err != nil {
+			return err
+		}
+		if conversationType == "direct" {
+			existing, err := findExistingDirectConversation(ctx, tx, userID, participantIDs[0])
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				existingConversation = existing
+				return nil
+			}
+		}
+
 		if err := tx.Create(&conversation).Error; err != nil {
 			return err
 		}
 
-		participants := make([]model.ConversationParticipant, 0, len(participantIDs))
-		for _, participantID := range participantIDs {
+		allParticipantIDs := append(participantIDs, userID)
+		participants := make([]model.ConversationParticipant, 0, len(allParticipantIDs))
+		for _, participantID := range allParticipantIDs {
 			role := "member"
 			if participantID == userID {
 				role = "owner"
@@ -142,7 +168,14 @@ func (s *ConversationService) Create(ctx context.Context, userID int64, input Cr
 
 		return tx.Create(&participants).Error
 	}); err != nil {
+		if errors.Is(err, ErrConversationInvalidInput) {
+			return nil, err
+		}
 		return nil, err
+	}
+	if existingConversation != nil {
+		summary := conversationSummary(*existingConversation, userID)
+		return &summary, ErrConversationAlreadyExists
 	}
 
 	return &ConversationSummary{
@@ -153,6 +186,78 @@ func (s *ConversationService) Create(ctx context.Context, userID int64, input Cr
 		UnreadCount: 0,
 		IsMuted:     false,
 	}, nil
+}
+
+func validateParticipantIDs(userID int64, participantIDs []int64) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(participantIDs))
+	validated := make([]int64, 0, len(participantIDs))
+	for _, participantID := range participantIDs {
+		if participantID <= 0 || participantID == userID {
+			return nil, ErrConversationInvalidInput
+		}
+		if _, exists := seen[participantID]; exists {
+			return nil, ErrConversationInvalidInput
+		}
+		seen[participantID] = struct{}{}
+		validated = append(validated, participantID)
+	}
+	return validated, nil
+}
+
+func validateActiveParticipants(tx *gorm.DB, participantIDs []int64) error {
+	var activeCount int64
+	if err := tx.Model(&model.User{}).
+		Where("id IN ? AND status = ?", participantIDs, 0).
+		Count(&activeCount).Error; err != nil {
+		return err
+	}
+	if activeCount != int64(len(participantIDs)) {
+		return ErrConversationInvalidInput
+	}
+	return nil
+}
+
+func findExistingDirectConversation(ctx context.Context, tx *gorm.DB, userID, participantID int64) (*model.Conversation, error) {
+	var conversation model.Conversation
+	err := tx.WithContext(ctx).
+		Preload("Participants.User.Profile").
+		Joins("JOIN conversation_participants AS cp_self ON cp_self.conversation_id = conversations.id AND cp_self.user_id = ?", userID).
+		Joins("JOIN conversation_participants AS cp_target ON cp_target.conversation_id = conversations.id AND cp_target.user_id = ?", participantID).
+		Where("conversations.type = ?", "direct").
+		Where("(SELECT COUNT(*) FROM conversation_participants AS cp_count WHERE cp_count.conversation_id = conversations.id) = ?", 2).
+		First(&conversation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &conversation, nil
+}
+
+func conversationSummary(conversation model.Conversation, userID int64) ConversationSummary {
+	title := conversation.Title
+	if title == "" {
+		title = defaultConversationTitle(conversation.Participants, userID)
+	}
+	return ConversationSummary{
+		ID:          conversation.ID,
+		Type:        conversation.Type,
+		Title:       title,
+		AvatarURL:   otherParticipantAvatar(conversation.Participants, userID),
+		LastMessage: "",
+		UnreadCount: 0,
+		IsMuted:     participantMuted(conversation.Participants, userID),
+	}
+}
+
+func participantMuted(participants []model.ConversationParticipant, userID int64) bool {
+	for _, participant := range participants {
+		if participant.UserID == userID {
+			return participant.IsMuted
+		}
+	}
+	return false
 }
 
 func (s *ConversationService) Messages(ctx context.Context, userID, conversationID int64) ([]ConversationMessage, error) {
@@ -382,20 +487,4 @@ func userAvatar(user *model.User) string {
 		return ""
 	}
 	return user.Profile.AvatarURL
-}
-
-func uniqueParticipantIDs(ids []int64) []int64 {
-	seen := make(map[int64]struct{}, len(ids))
-	result := make([]int64, 0, len(ids))
-	for _, id := range ids {
-		if id == 0 {
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			continue
-		}
-		seen[id] = struct{}{}
-		result = append(result, id)
-	}
-	return result
 }
