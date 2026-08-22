@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
@@ -21,17 +22,18 @@ type SubmitVerificationInput struct {
 }
 
 type VerificationStatusView struct {
-	ID                int64   `json:"id"`
-	MerchantID        int64   `json:"merchant_id"`
-	Status            string  `json:"status"`
-	MerchantStatus    string  `json:"merchant_status"`
-	DocumentType      string  `json:"document_type"`
-	DocumentURL       string  `json:"document_url"`
-	BusinessLicense   string  `json:"business_license"`
-	RejectionReason   string  `json:"rejection_reason"`
+	ID              int64  `json:"id"`
+	MerchantID      int64  `json:"merchant_id"`
+	Status          string `json:"status"`
+	MerchantStatus  string `json:"merchant_status"`
+	DocumentType    string `json:"document_type"`
+	DocumentURL     string `json:"document_url"`
+	BusinessLicense string `json:"business_license"`
+	RejectionReason string `json:"rejection_reason"`
 }
 
 var ErrVerificationInvalidInput = errors.New("verification invalid input")
+var ErrVerificationForbidden = errors.New("verification forbidden")
 
 func NewVerificationService(db *gorm.DB) *VerificationService {
 	if db == nil {
@@ -41,7 +43,8 @@ func NewVerificationService(db *gorm.DB) *VerificationService {
 }
 
 func (s *VerificationService) Submit(ctx context.Context, userID int64, input SubmitVerificationInput) (*VerificationStatusView, error) {
-	if strings.TrimSpace(input.DocumentType) == "" || strings.TrimSpace(input.DocumentURL) == "" {
+	documentType, documentURL, businessLicense, err := validateSubmissionInput(input)
+	if err != nil {
 		return nil, ErrVerificationInvalidInput
 	}
 
@@ -58,9 +61,9 @@ func (s *VerificationService) Submit(ctx context.Context, userID int64, input Su
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		verification = model.MerchantVerification{
 			MerchantID:      merchant.ID,
-			DocumentType:    strings.TrimSpace(input.DocumentType),
-			DocumentURL:     strings.TrimSpace(input.DocumentURL),
-			BusinessLicense: strings.TrimSpace(input.BusinessLicense),
+			DocumentType:    documentType,
+			DocumentURL:     documentURL,
+			BusinessLicense: businessLicense,
 			Status:          "pending",
 		}
 		if err := s.db.WithContext(ctx).Create(&verification).Error; err != nil {
@@ -69,9 +72,9 @@ func (s *VerificationService) Submit(ctx context.Context, userID int64, input Su
 	} else if err != nil {
 		return nil, err
 	} else {
-		verification.DocumentType = strings.TrimSpace(input.DocumentType)
-		verification.DocumentURL = strings.TrimSpace(input.DocumentURL)
-		verification.BusinessLicense = strings.TrimSpace(input.BusinessLicense)
+		verification.DocumentType = documentType
+		verification.DocumentURL = documentURL
+		verification.BusinessLicense = businessLicense
 		verification.Status = "pending"
 		verification.RejectionReason = ""
 		if err := s.db.WithContext(ctx).Save(&verification).Error; err != nil {
@@ -119,6 +122,17 @@ func (s *VerificationService) Status(ctx context.Context, userID int64) (*Verifi
 }
 
 func (s *VerificationService) ensureMerchant(ctx context.Context, userID int64) (*model.Merchant, error) {
+	var user model.User
+	if err := s.db.WithContext(ctx).Where("id = ?", userID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrVerificationForbidden
+		}
+		return nil, err
+	}
+	if user.Status != 0 || strings.ToLower(strings.TrimSpace(user.Role)) != "merchant" {
+		return nil, ErrVerificationForbidden
+	}
+
 	var merchant model.Merchant
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&merchant).Error; err == nil {
 		return &merchant, nil
@@ -135,6 +149,21 @@ func (s *VerificationService) ensureMerchant(ctx context.Context, userID int64) 
 		return nil, err
 	}
 	return &merchant, nil
+}
+
+func validateSubmissionInput(input SubmitVerificationInput) (string, string, string, error) {
+	documentType := strings.TrimSpace(input.DocumentType)
+	documentURL := strings.TrimSpace(input.DocumentURL)
+	businessLicense := strings.TrimSpace(input.BusinessLicense)
+	if documentType == "" || documentURL == "" || len(documentType) > 50 || len(documentURL) > 512 || len(businessLicense) > 255 {
+		return "", "", "", ErrVerificationInvalidInput
+	}
+
+	parsedURL, err := url.ParseRequestURI(documentURL)
+	if err != nil || parsedURL.Host == "" || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return "", "", "", ErrVerificationInvalidInput
+	}
+	return documentType, documentURL, businessLicense, nil
 }
 
 func mapVerificationView(verification model.MerchantVerification, merchant *model.Merchant) VerificationStatusView {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/verification/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/verification/service"
 )
 
 type VerificationHandler struct {
@@ -27,10 +27,12 @@ func NewVerificationHandler(svc *service.VerificationService) *VerificationHandl
 // @Produce json
 // @Success 201 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
 // @Router /merchant/verification [post]
 func (h *VerificationHandler) Submit(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	if userID == 0 {
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -43,6 +45,10 @@ func (h *VerificationHandler) Submit(c *gin.Context) {
 
 	verification, err := h.svc.Submit(c.Request.Context(), userID, req)
 	if err != nil {
+		if errors.Is(err, service.ErrVerificationForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "merchant access required"})
+			return
+		}
 		if errors.Is(err, service.ErrVerificationInvalidInput) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid verification input"})
 			return
@@ -61,16 +67,21 @@ func (h *VerificationHandler) Submit(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
 // @Router /merchant/verification [get]
 func (h *VerificationHandler) Status(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	if userID == 0 {
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	status, err := h.svc.Status(c.Request.Context(), userID)
 	if err != nil {
+		if errors.Is(err, service.ErrVerificationForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "merchant access required"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load verification status"})
 		return
 	}
