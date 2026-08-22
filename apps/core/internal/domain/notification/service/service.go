@@ -14,6 +14,18 @@ type NotificationService struct {
 	db *gorm.DB
 }
 
+const (
+	DefaultNotificationListLimit = 20
+	MaxNotificationListLimit     = 100
+)
+
+// NotificationListQuery controls the authenticated notification list.
+// Cursor is the last notification id returned by the previous page.
+type NotificationListQuery struct {
+	Limit  int
+	Cursor *int64
+}
+
 var ErrNotificationNotFound = errors.New("notification not found")
 
 func NewNotificationService(db *gorm.DB) *NotificationService {
@@ -23,15 +35,34 @@ func NewNotificationService(db *gorm.DB) *NotificationService {
 	return &NotificationService{db: db}
 }
 
-func (s *NotificationService) List(ctx context.Context, userID int64) ([]model.Notification, error) {
-	var notifications []model.Notification
-	if err := s.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Order("is_read asc, created_at desc").
-		Find(&notifications).Error; err != nil {
-		return nil, err
+func (s *NotificationService) List(ctx context.Context, userID int64, query NotificationListQuery) ([]model.Notification, *int64, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = DefaultNotificationListLimit
 	}
-	return notifications, nil
+	if limit > MaxNotificationListLimit {
+		limit = MaxNotificationListLimit
+	}
+
+	notifications := make([]model.Notification, 0, limit)
+	dbQuery := s.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at desc, id desc").
+		Limit(limit + 1)
+	if query.Cursor != nil {
+		dbQuery = dbQuery.Where("id < ?", *query.Cursor)
+	}
+	if err := dbQuery.Find(&notifications).Error; err != nil {
+		return nil, nil, err
+	}
+
+	var nextCursor *int64
+	if len(notifications) > limit {
+		value := notifications[limit-1].ID
+		nextCursor = &value
+		notifications = notifications[:limit]
+	}
+	return notifications, nextCursor, nil
 }
 
 func (s *NotificationService) MarkRead(ctx context.Context, userID, notificationID int64) (*model.Notification, error) {

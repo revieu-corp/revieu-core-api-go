@@ -2101,6 +2101,15 @@ paths:
   /notifications:
     get:
       description: Returns notifications for the authenticated user
+      parameters:
+      - description: Cursor (notification id) for the next page
+        in: query
+        name: cursor
+        type: integer
+      - description: Page size (max 100)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
@@ -2108,6 +2117,12 @@ paths:
           description: OK
           schema:
             additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "401":
           description: Unauthorized
