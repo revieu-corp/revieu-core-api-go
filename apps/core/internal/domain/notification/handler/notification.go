@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 )
 
 type NotificationHandler struct {
@@ -51,22 +51,29 @@ func (h *NotificationHandler) List(c *gin.Context) {
 // @Param id path int true "Notification ID"
 // @Success 200 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Router /notifications/{id}/read [patch]
 func (h *NotificationHandler) MarkRead(c *gin.Context) {
 	userID := c.GetInt64("user_id")
-	if userID == 0 {
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
 	notification, err := h.svc.MarkRead(c.Request.Context(), userID, id)
 	if err != nil {
+		if errors.Is(err, service.ErrNotificationForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		if errors.Is(err, service.ErrNotificationNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return

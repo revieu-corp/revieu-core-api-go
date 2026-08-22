@@ -15,6 +15,7 @@ type NotificationService struct {
 }
 
 var ErrNotificationNotFound = errors.New("notification not found")
+var ErrNotificationForbidden = errors.New("notification forbidden")
 
 func NewNotificationService(db *gorm.DB) *NotificationService {
 	if db == nil {
@@ -40,9 +41,18 @@ func (s *NotificationService) MarkRead(ctx context.Context, userID, notification
 		Where("id = ? AND user_id = ?", notificationID, userID).
 		First(&notification).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotificationNotFound
+			var ownedNotification model.Notification
+			if lookupErr := s.db.WithContext(ctx).First(&ownedNotification, notificationID).Error; errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return nil, ErrNotificationNotFound
+			} else if lookupErr != nil {
+				return nil, lookupErr
+			}
+			return nil, ErrNotificationForbidden
 		}
 		return nil, err
+	}
+	if notification.IsRead && notification.ReadAt != nil {
+		return &notification, nil
 	}
 
 	now := time.Now().UTC()

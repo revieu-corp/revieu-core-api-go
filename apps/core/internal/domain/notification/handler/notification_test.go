@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -122,5 +122,71 @@ func TestNotificationHandlerMarkReadUpdatesNotification(t *testing.T) {
 	}
 	if !notification.IsRead {
 		t.Fatalf("expected notification to be marked read")
+	}
+	if notification.ReadAt == nil {
+		t.Fatal("expected read_at to be populated")
+	}
+	firstReadAt := *notification.ReadAt
+
+	secondRecorder := httptest.NewRecorder()
+	secondContext, _ := gin.CreateTestContext(secondRecorder)
+	secondContext.Params = gin.Params{{Key: "id", Value: "8001"}}
+	secondContext.Request = httptest.NewRequest(http.MethodPatch, "/notifications/8001/read", nil)
+	secondContext.Set("user_id", int64(601))
+	h.MarkRead(secondContext)
+	if secondRecorder.Code != http.StatusOK {
+		t.Fatalf("expected repeated mark-read status 200, got %d", secondRecorder.Code)
+	}
+	if err := db.First(&notification, 8001).Error; err != nil {
+		t.Fatalf("failed to reload notification after repeated mark-read: %v", err)
+	}
+	if notification.ReadAt == nil || !notification.ReadAt.Equal(firstReadAt) {
+		t.Fatalf("expected repeated mark-read to preserve read_at, got %v", notification.ReadAt)
+	}
+}
+
+func TestNotificationHandlerMarkReadEnforcesOwnershipAndInvalidIDs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupNotificationTestDB(t)
+	seedNotificationFixture(t, db)
+	if err := db.Create(&model.User{ID: 602, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create second user: %v", err)
+	}
+	if err := db.Create(&model.Notification{ID: 8002, UserID: 602, Type: "private", Title: "Private"}).Error; err != nil {
+		t.Fatalf("failed to create second notification: %v", err)
+	}
+	h := NewNotificationHandler(service.NewNotificationService(db))
+
+	mark := func(userID int64, id string, authenticated bool) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: id}}
+		c.Request = httptest.NewRequest(http.MethodPatch, "/notifications/"+id+"/read", nil)
+		if authenticated {
+			c.Set("user_id", userID)
+		}
+		h.MarkRead(c)
+		return recorder
+	}
+
+	for _, testCase := range []struct {
+		name          string
+		userID        int64
+		id            string
+		authenticated bool
+		expected      int
+	}{
+		{name: "other-owner", userID: 601, id: "8002", authenticated: true, expected: http.StatusForbidden},
+		{name: "missing", userID: 601, id: "9999", authenticated: true, expected: http.StatusNotFound},
+		{name: "invalid-id", userID: 601, id: "0", authenticated: true, expected: http.StatusBadRequest},
+		{name: "unauthenticated", userID: 0, id: "8001", authenticated: false, expected: http.StatusUnauthorized},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := mark(testCase.userID, testCase.id, testCase.authenticated)
+			if recorder.Code != testCase.expected {
+				t.Fatalf("expected status %d, got %d: %s", testCase.expected, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
