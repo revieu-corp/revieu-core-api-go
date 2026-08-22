@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/admin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/ai"
@@ -10,6 +11,7 @@ import (
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/category"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/dish"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/feed"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/media"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/merchant"
@@ -23,7 +25,6 @@ import (
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/users"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/verification"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/voucher"
-	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -44,6 +45,7 @@ func Setup(router *gin.Engine, cfg *config.Config) {
 	user.RegisterRoutes(api, cfg)
 	users.RegisterRoutes(api, cfg)
 	coupon.RegisterRoutes(api, cfg)
+	dish.RegisterRoutes(api, cfg)
 	feed.RegisterRoutes(api, cfg)
 	merchant.RegisterRoutes(api, cfg)
 	merchants.RegisterRoutes(api, cfg)

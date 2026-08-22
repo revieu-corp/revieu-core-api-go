@@ -490,11 +490,25 @@ definitions:
     type: object
   internal_domain_coupon_handler.CreateStoreCouponRequest:
     properties:
+      coupon_type:
+        type: string
       description:
+        type: string
+      discount_percentage:
+        type: number
+      dish_ids:
+        items:
+          type: integer
+        type: array
+      image_url:
         type: string
       max_per_user:
         type: integer
+      original_price:
+        type: number
       price:
+        type: number
+      sale_price:
         type: number
       status:
         type: string
@@ -523,10 +537,52 @@ definitions:
     required:
     - userId
     type: object
+  internal_domain_coupon_handler.UpdateStoreCouponRequest:
+    properties:
+      coupon_type:
+        type: string
+      description:
+        type: string
+      discount_percentage:
+        type: number
+      dish_ids:
+        items:
+          type: integer
+        type: array
+      image_url:
+        type: string
+      max_per_user:
+        type: integer
+      original_price:
+        type: number
+      price:
+        type: number
+      sale_price:
+        type: number
+      status:
+        type: string
+      terms:
+        type: string
+      title:
+        type: string
+      total_quantity:
+        type: integer
+      type:
+        type: string
+      valid_from:
+        type: string
+      valid_until:
+        type: string
+    type: object
   internal_domain_coupon_handler.ValidateCouponRequest:
     properties:
       quantity:
         type: integer
+    type: object
+  internal_domain_voucher_handler.RedeemByCodeRequest:
+    properties:
+      code:
+        type: string
     type: object
   internal_domain_voucher_handler.RedeemByTokenRequest:
     properties:
@@ -1587,6 +1643,46 @@ paths:
       tags:
       - store
   /merchant/stores/{id}/coupons:
+    get:
+      description: Lists all non-deleted coupons owned by the authenticated merchant
+        for a store
+      parameters:
+      - description: Store ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List merchant store coupons
+      tags:
+      - coupon
     post:
       consumes:
       - application/json
@@ -1696,6 +1792,64 @@ paths:
       security:
       - BearerAuth: []
       summary: Delete store coupon
+      tags:
+      - coupon
+    patch:
+      consumes:
+      - application/json
+      description: Updates an owned store coupon
+      parameters:
+      - description: Store ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Coupon ID
+        in: path
+        name: couponId
+        required: true
+        type: integer
+      - description: Update store coupon request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_domain_coupon_handler.UpdateStoreCouponRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update merchant store coupon
       tags:
       - coupon
   /merchant/stores/{id}/deactivate:
@@ -1837,6 +1991,102 @@ paths:
       security:
       - BearerAuth: []
       summary: Redeem voucher by merchant owner
+      tags:
+      - voucher
+  /merchant/vouchers/code/{code}:
+    get:
+      description: Validates a voucher code for the authenticated merchant without
+        mutating state
+      parameters:
+      - description: Voucher code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_voucher_service.RedeemPreview'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Preview voucher redemption by code
+      tags:
+      - voucher
+  /merchant/vouchers/redeem-by-code:
+    post:
+      consumes:
+      - application/json
+      description: Redeems a voucher code for the authenticated merchant
+      parameters:
+      - description: Redeem by code request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_domain_voucher_handler.RedeemByCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Redeem voucher by code
       tags:
       - voucher
   /merchant/vouchers/redeem-by-token:

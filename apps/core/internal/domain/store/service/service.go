@@ -291,6 +291,7 @@ func (s *StoreService) HoursPublished(ctx context.Context, storeID int64) ([]mod
 func (s *StoreService) ListMine(ctx context.Context, userID int64, limit *int) ([]model.Store, error) {
 	dbQuery := s.db.WithContext(ctx).
 		Model(&model.Store{}).
+		Preload("Hours").
 		Joins("JOIN merchants ON merchants.id = stores.merchant_id").
 		Where("merchants.user_id = ?", userID).
 		Order("stores.id desc")

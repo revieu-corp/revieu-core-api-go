@@ -219,6 +219,25 @@ CREATE TABLE store_hours (
     is_closed BOOLEAN DEFAULT false
 );
 
+CREATE TABLE dishes (
+    id BIGSERIAL PRIMARY KEY,
+    merchant_id BIGINT NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    store_id BIGINT REFERENCES stores(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
+    image_url VARCHAR(512),
+    description TEXT,
+    original_price NUMERIC(10, 2) DEFAULT 0,
+    category VARCHAR(100),
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_dishes_merchant ON dishes(merchant_id);
+CREATE INDEX idx_dishes_store ON dishes(store_id);
+CREATE INDEX idx_dishes_deleted_at ON dishes(deleted_at);
+
 -- =============================================
 -- E. Tags
 -- =============================================
@@ -370,6 +389,7 @@ CREATE TABLE coupons (
     original_price NUMERIC(10, 2),
     sale_price NUMERIC(10, 2),
     discount_percentage NUMERIC(5, 2),
+    dish_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
     total_quantity INT DEFAULT 0,
     claimed_count INT DEFAULT 0,
     redeemed_count INT DEFAULT 0,

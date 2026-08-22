@@ -40,7 +40,11 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 		merchantStoresAuth.POST("/:id/deactivate", storeH.Deactivate)
 		merchantStoresAuth.PATCH("/:id", storeH.Update)
 		merchantStoresAuth.DELETE("/:id", storeH.Delete)
+		merchantStoresAuth.GET("/:id/coupons", couponH.ListMerchantStoreCoupons)
 		merchantStoresAuth.POST("/:id/coupons", couponH.CreateStoreCoupon)
+		merchantStoresAuth.PATCH("/:id/coupons/:couponId", couponH.UpdateStoreCoupon)
+		merchantStoresAuth.POST("/:id/coupons/:couponId/enable", couponH.EnableStoreCoupon)
+		merchantStoresAuth.POST("/:id/coupons/:couponId/disable", couponH.DisableStoreCoupon)
 		merchantStoresAuth.DELETE("/:id/coupons/:couponId", couponH.DeleteStoreCoupon)
 	}
 }

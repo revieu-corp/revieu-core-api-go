@@ -21,6 +21,7 @@ type Coupon struct {
 	OriginalPrice      float64        `gorm:"type:numeric(10,2)" json:"original_price"`
 	SalePrice          float64        `gorm:"type:numeric(10,2)" json:"sale_price"`
 	DiscountPercentage float64        `gorm:"type:numeric(5,2)" json:"discount_percentage"`
+	DishIDs            string         `gorm:"type:jsonb;default:'[]'" json:"dish_ids"`
 	TotalQuantity      int            `gorm:"default:0" json:"total_quantity"`
 	ClaimedCount       int            `gorm:"default:0" json:"claimed_count"`
 	RedeemedCount      int            `gorm:"default:0" json:"redeemed_count"`

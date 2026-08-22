@@ -130,18 +130,34 @@ func (s *VoucherService) UpdateStatus(ctx context.Context, id int64, status stri
 }
 
 func (s *VoucherService) PreviewRedeemByToken(ctx context.Context, merchantUserID int64, scanToken string) (*RedeemPreview, error) {
-	var merchant model.Merchant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", merchantUserID).First(&merchant).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrVoucherForbidden
-		}
-		return nil, err
-	}
-
 	var voucher model.Voucher
 	if err := s.db.WithContext(ctx).Where("scan_token = ?", scanToken).First(&voucher).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrVoucherNotFound
+		}
+		return nil, err
+	}
+
+	return s.previewRedeemVoucher(ctx, merchantUserID, voucher)
+}
+
+func (s *VoucherService) PreviewRedeemByCode(ctx context.Context, merchantUserID int64, code string) (*RedeemPreview, error) {
+	var voucher model.Voucher
+	if err := s.db.WithContext(ctx).Where("code = ?", code).First(&voucher).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrVoucherNotFound
+		}
+		return nil, err
+	}
+
+	return s.previewRedeemVoucher(ctx, merchantUserID, voucher)
+}
+
+func (s *VoucherService) previewRedeemVoucher(ctx context.Context, merchantUserID int64, voucher model.Voucher) (*RedeemPreview, error) {
+	var merchant model.Merchant
+	if err := s.db.WithContext(ctx).Where("user_id = ?", merchantUserID).First(&merchant).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrVoucherForbidden
 		}
 		return nil, err
 	}
@@ -200,6 +216,18 @@ func (s *VoucherService) PreviewRedeemByToken(ctx context.Context, merchantUserI
 	}
 
 	return preview, nil
+}
+
+func (s *VoucherService) RedeemByMerchantCode(ctx context.Context, merchantUserID int64, code string) error {
+	var voucher model.Voucher
+	if err := s.db.WithContext(ctx).Where("code = ?", code).First(&voucher).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrVoucherNotFound
+		}
+		return err
+	}
+
+	return s.RedeemByMerchant(ctx, merchantUserID, voucher.ID)
 }
 
 func (s *VoucherService) RedeemByMerchantToken(ctx context.Context, merchantUserID int64, scanToken string) error {
