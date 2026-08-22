@@ -2295,14 +2295,18 @@ paths:
       - order
   /orders/{id}/pay:
     post:
-      description: Completes the configured development payment flow for an order
-        and issues vouchers
+      description: Executes an idempotent configured payment flow for an order and
+        issues vouchers
       parameters:
       - description: Order ID
         in: path
         name: id
         required: true
         type: integer
+      - description: Client-generated idempotency key
+        in: header
+        name: Idempotency-Key
+        type: string
       produces:
       - application/json
       responses:
@@ -2331,6 +2335,18 @@ paths:
             type: object
         "404":
           description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
           schema:
             additionalProperties:
               type: string

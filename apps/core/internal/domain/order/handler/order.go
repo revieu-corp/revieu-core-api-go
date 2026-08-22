@@ -109,15 +109,18 @@ func (h *OrderHandler) Detail(c *gin.Context) {
 
 // PayOrder godoc
 // @Summary Pay order
-// @Description Completes the configured development payment flow for an order and issues vouchers
+// @Description Executes an idempotent configured payment flow for an order and issues vouchers
 // @Tags order
 // @Produce json
 // @Param id path int true "Order ID"
+// @Param Idempotency-Key header string false "Client-generated idempotency key"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
 // @Failure 403 {object} map[string]string
 // @Failure 404 {object} map[string]string
+// @Failure 409 {object} map[string]string
+// @Failure 503 {object} map[string]string
 // @Router /orders/{id}/pay [post]
 func (h *OrderHandler) Pay(c *gin.Context) {
 	userID := c.GetInt64("user_id")
@@ -130,7 +133,7 @@ func (h *OrderHandler) Pay(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	result, err := h.svc.Pay(c.Request.Context(), userID, id)
+	result, err := h.svc.PayWithIdempotencyKey(c.Request.Context(), userID, id, c.GetHeader("Idempotency-Key"))
 	if err != nil {
 		status, msg := orderErrorStatus(err)
 		c.JSON(status, gin.H{"error": msg})
@@ -149,6 +152,10 @@ func orderErrorStatus(err error) (int, string) {
 		return http.StatusBadRequest, "invalid order input"
 	case errors.Is(err, service.ErrOrderInvalidState):
 		return http.StatusBadRequest, "invalid order state"
+	case errors.Is(err, service.ErrPaymentInProgress):
+		return http.StatusConflict, "payment already in progress"
+	case errors.Is(err, service.ErrPaymentAttemptInvalidState):
+		return http.StatusConflict, "invalid payment attempt state"
 	case errors.Is(err, service.ErrStoreNotPublished):
 		return http.StatusBadRequest, "store not published"
 	case errors.Is(err, service.ErrCouponInactive):

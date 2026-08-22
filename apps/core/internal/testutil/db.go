@@ -37,6 +37,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&model.Order{},
 		&model.Voucher{},
 		&model.Payment{},
+		&model.PaymentAttempt{},
 		&model.MediaUpload{},
 		&model.UserFollow{},
 		&model.MerchantFollow{},

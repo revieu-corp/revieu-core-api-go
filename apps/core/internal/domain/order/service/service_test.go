@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/testutil"
@@ -117,12 +118,12 @@ func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {
 		t.Fatalf("failed to create order: %v", err)
 	}
 
-	if _, err := svc.Pay(context.Background(), buyer.ID, order.ID); err != nil {
+	if _, err := svc.PayWithIdempotencyKey(context.Background(), buyer.ID, order.ID, "checkout-1"); err != nil {
 		t.Fatalf("failed to pay order first time: %v", err)
 	}
 	firstTokens := loadVoucherScanTokens(t, svc, order.ID)
 
-	if _, err := svc.Pay(context.Background(), buyer.ID, order.ID); err != nil {
+	if _, err := svc.PayWithIdempotencyKey(context.Background(), buyer.ID, order.ID, "checkout-1"); err != nil {
 		t.Fatalf("failed to pay order second time: %v", err)
 	}
 	secondTokens := loadVoucherScanTokens(t, svc, order.ID)
@@ -137,6 +138,14 @@ func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {
 		if firstTokens[i] != secondTokens[i] {
 			t.Fatalf("expected token %d to remain stable, got first=%q second=%q", i, firstTokens[i], secondTokens[i])
 		}
+	}
+
+	var attemptCount int64
+	if err := svc.db.Model(&model.PaymentAttempt{}).Where("order_id = ?", order.ID).Count(&attemptCount).Error; err != nil {
+		t.Fatalf("failed to count payment attempts: %v", err)
+	}
+	if attemptCount != 1 {
+		t.Fatalf("expected one idempotent payment attempt, got %d", attemptCount)
 	}
 }
 
@@ -168,5 +177,100 @@ func TestPayRejectsMockPaymentOutsideExplicitDevelopmentMode(t *testing.T) {
 	}
 	if voucherCount != 0 {
 		t.Fatalf("expected no vouchers after rejected payment, got %d", voucherCount)
+	}
+
+	var failedAttempt model.PaymentAttempt
+	if err := svc.db.Where("order_id = ?", order.ID).First(&failedAttempt).Error; err != nil {
+		t.Fatalf("failed to load payment attempt: %v", err)
+	}
+	if failedAttempt.Status != paymentAttemptStatusFailed {
+		t.Fatalf("expected failed payment attempt, got %q", failedAttempt.Status)
+	}
+
+	if _, err := svc.Pay(context.Background(), buyer.ID, order.ID); err != nil {
+		t.Fatalf("expected failed attempt to be retryable in development mode: %v", err)
+	}
+}
+
+func TestApplyPaymentCallbackPaidSettlesAttempt(t *testing.T) {
+	svc, buyer, _, _, coupon := setupOrderServiceTest(t)
+	order, err := svc.Create(context.Background(), buyer.ID, CreateOrderInput{CouponID: coupon.ID, Quantity: 1})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	attempt := &model.PaymentAttempt{
+		OrderID:        order.ID,
+		UserID:         buyer.ID,
+		IdempotencyKey: "gateway-attempt-1",
+		Status:         paymentAttemptStatusProcessing,
+		Amount:         order.TotalPrice,
+		Currency:       "USD",
+		PaymentMethod:  "card",
+		StartedAt:      time.Now().UTC(),
+	}
+	if err := svc.db.Create(attempt).Error; err != nil {
+		t.Fatalf("failed to create processing attempt: %v", err)
+	}
+
+	productionSvc := NewOrderService(svc.db)
+	result, err := productionSvc.ApplyPaymentCallback(context.Background(), attempt.ID, PaymentCallbackInput{
+		Status:            paymentAttemptStatusPaid,
+		ProviderReference: "provider-payment-1",
+	})
+	if err != nil {
+		t.Fatalf("paid callback returned error: %v", err)
+	}
+	if result == nil || result.PaymentStatus != paymentAttemptStatusPaid || len(result.Vouchers) != 1 {
+		t.Fatalf("unexpected callback result: %+v", result)
+	}
+
+	var refreshed model.PaymentAttempt
+	if err := svc.db.First(&refreshed, attempt.ID).Error; err != nil {
+		t.Fatalf("failed to reload callback attempt: %v", err)
+	}
+	if refreshed.Status != paymentAttemptStatusPaid || refreshed.ProviderReference != "provider-payment-1" || refreshed.PaymentID == nil {
+		t.Fatalf("unexpected paid attempt: %+v", refreshed)
+	}
+
+	if _, err := productionSvc.ApplyPaymentCallback(context.Background(), attempt.ID, PaymentCallbackInput{Status: paymentAttemptStatusPaid, ProviderReference: "provider-payment-1"}); err != nil {
+		t.Fatalf("repeated paid callback should be idempotent: %v", err)
+	}
+}
+
+func TestReconcileStalePaymentAttempts(t *testing.T) {
+	svc, buyer, _, _, coupon := setupOrderServiceTest(t)
+	order, err := svc.Create(context.Background(), buyer.ID, CreateOrderInput{CouponID: coupon.ID, Quantity: 1})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+	startedAt := time.Now().UTC().Add(-2 * time.Hour)
+	attempt := &model.PaymentAttempt{
+		OrderID:        order.ID,
+		UserID:         buyer.ID,
+		IdempotencyKey: "stale-attempt-1",
+		Status:         paymentAttemptStatusProcessing,
+		Amount:         order.TotalPrice,
+		Currency:       "USD",
+		PaymentMethod:  "mock",
+		StartedAt:      startedAt,
+	}
+	if err := svc.db.Create(attempt).Error; err != nil {
+		t.Fatalf("failed to create stale attempt: %v", err)
+	}
+
+	count, err := svc.ReconcileStalePaymentAttempts(context.Background(), time.Hour)
+	if err != nil {
+		t.Fatalf("reconcile returned error: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one stale attempt, got %d", count)
+	}
+	var refreshed model.PaymentAttempt
+	if err := svc.db.First(&refreshed, attempt.ID).Error; err != nil {
+		t.Fatalf("failed to reload stale attempt: %v", err)
+	}
+	if refreshed.Status != paymentAttemptStatusFailed || refreshed.FailureReason != "stale_processing_timeout" || refreshed.CompletedAt == nil {
+		t.Fatalf("unexpected reconciled attempt: %+v", refreshed)
 	}
 }
