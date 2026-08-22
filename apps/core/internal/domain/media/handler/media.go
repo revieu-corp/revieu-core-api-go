@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/media/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/media/service"
-	"github.com/gin-gonic/gin"
 )
 
 type MediaHandler struct {
@@ -31,8 +31,17 @@ func NewMediaHandler(svc *service.MediaService) *MediaHandler {
 // @Failure 500 {object} map[string]string
 // @Router /media/uploads [post]
 func (h *MediaHandler) CreateUpload(c *gin.Context) {
-	upload, err := h.svc.CreateUpload(c.Request.Context())
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	upload, err := h.svc.CreateUpload(c.Request.Context(), userID)
 	if err != nil {
+		if errors.Is(err, service.ErrUnauthorized) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -56,7 +65,16 @@ func (h *MediaHandler) Analyze(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := h.svc.Analyze(c.Request.Context(), id); err != nil {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if err := h.svc.Analyze(c.Request.Context(), userID, id); err != nil {
+		if errors.Is(err, service.ErrUnauthorized) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -76,8 +94,8 @@ func (h *MediaHandler) Analyze(c *gin.Context) {
 // @Failure 500 {object} map[string]string
 // @Router /media/presigned-urls [post]
 func (h *MediaHandler) CreatePresignedURLs(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
@@ -88,8 +106,12 @@ func (h *MediaHandler) CreatePresignedURLs(c *gin.Context) {
 		return
 	}
 
-	response, err := h.svc.CreatePresignedURLs(c.Request.Context(), userID.(int64), &req)
+	response, err := h.svc.CreatePresignedURLs(c.Request.Context(), userID, &req)
 	if err != nil {
+		if errors.Is(err, service.ErrUnauthorized) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
 		if errors.Is(err, service.ErrTooManyFiles) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

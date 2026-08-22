@@ -7,17 +7,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/media/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/storage"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 var (
 	ErrTooManyFiles       = errors.New("too many files, maximum 10 allowed")
 	ErrInvalidContentType = errors.New("invalid content type, only image/jpeg, image/png, image/gif, image/webp allowed")
+	ErrUnauthorized       = errors.New("authenticated user is required")
 )
 
 var allowedContentTypes = map[string]string{
@@ -40,6 +41,9 @@ func NewMediaService(db *gorm.DB, r2Client *storage.R2Client) *MediaService {
 }
 
 func (s *MediaService) CreatePresignedURLs(ctx context.Context, userID int64, req *dto.PresignedURLRequest) (*dto.PresignedURLResponse, error) {
+	if userID <= 0 {
+		return nil, ErrUnauthorized
+	}
 	if len(req.Files) > 10 {
 		return nil, ErrTooManyFiles
 	}
@@ -93,9 +97,13 @@ func (s *MediaService) CreatePresignedURLs(ctx context.Context, userID int64, re
 	return response, nil
 }
 
-func (s *MediaService) CreateUpload(ctx context.Context) (model.MediaUpload, error) {
+func (s *MediaService) CreateUpload(ctx context.Context, userID int64) (model.MediaUpload, error) {
+	if userID <= 0 {
+		return model.MediaUpload{}, ErrUnauthorized
+	}
 	upload := model.MediaUpload{
 		UUID:      uuid.New().String(),
+		UserID:    userID,
 		ObjectKey: fmt.Sprintf("uploads/%d", time.Now().UnixNano()),
 		FileURL:   fmt.Sprintf("https://example.com/files/%d", time.Now().UnixNano()),
 		Status:    "pending",
@@ -103,7 +111,10 @@ func (s *MediaService) CreateUpload(ctx context.Context) (model.MediaUpload, err
 	return upload, s.db.WithContext(ctx).Create(&upload).Error
 }
 
-func (s *MediaService) Analyze(ctx context.Context, id int64) error {
+func (s *MediaService) Analyze(ctx context.Context, userID, id int64) error {
+	if userID <= 0 {
+		return ErrUnauthorized
+	}
 	var upload model.MediaUpload
-	return s.db.WithContext(ctx).First(&upload, id).Error
+	return s.db.WithContext(ctx).Where("id = ? AND user_id = ?", id, userID).First(&upload).Error
 }
