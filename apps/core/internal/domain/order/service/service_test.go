@@ -104,6 +104,11 @@ func TestPayCreatesVoucherScanTokens(t *testing.T) {
 	if tokens[0] == tokens[1] {
 		t.Fatalf("expected unique voucher scan tokens, got %#v", tokens)
 	}
+
+	var audit model.OperationalAuditLog
+	if err := svc.db.Where("action = ? AND target_id = ? AND result = ?", "order.pay", order.ID, "success").First(&audit).Error; err != nil {
+		t.Fatalf("expected successful payment audit: %v", err)
+	}
 }
 
 func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {

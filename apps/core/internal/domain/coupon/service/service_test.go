@@ -24,6 +24,7 @@ func setupCouponTestDB(t *testing.T) *gorm.DB {
 		&model.Store{},
 		&model.Dish{},
 		&model.Coupon{},
+		&model.OperationalAuditLog{},
 	); err != nil {
 		t.Fatalf("failed to migrate test db: %v", err)
 	}
@@ -77,6 +78,11 @@ func TestCouponServiceMerchantCRUDAndStatus(t *testing.T) {
 	active, err := svc.SetStatusForStore(context.Background(), ownerID, store.ID, coupon.ID, couponStatusActive)
 	if err != nil || active.Status != couponStatusActive {
 		t.Fatalf("enable coupon returned %+v, err=%v", active, err)
+	}
+
+	var audit model.OperationalAuditLog
+	if err := db.Where("action = ? AND target_id = ? AND result = ?", "coupon.activate", coupon.ID, "success").First(&audit).Error; err != nil {
+		t.Fatalf("expected successful coupon activation audit: %v", err)
 	}
 }
 

@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"github.com/google/uuid"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/observability"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -151,8 +152,9 @@ func (s *OrderService) Detail(ctx context.Context, userID, orderID int64) (*Orde
 }
 
 func (s *OrderService) Pay(ctx context.Context, userID, orderID int64) (*PayResult, error) {
+	started := time.Now()
 	var result *PayResult
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var order model.Order
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, orderID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -267,7 +269,25 @@ func (s *OrderService) Pay(ctx context.Context, userID, orderID int64) (*PayResu
 
 		result = &PayResult{Order: order, Vouchers: vouchers}
 		return nil
-	}); err != nil {
+	})
+	duration := time.Since(started)
+	audit := observability.AuditInput{
+		ActorID:    userID,
+		ActorRole:  "user",
+		Action:     "order.pay",
+		TargetType: "order",
+		TargetID:   orderID,
+		Result:     observability.ResultSuccess,
+		Details:    fmt.Sprintf(`{"status":"%s"}`, orderStatusPaid),
+		Duration:   duration,
+	}
+	if err != nil {
+		audit.Result = observability.ResultFailure
+		audit.ErrorClass = observability.ClassifyError(err)
+	}
+	_ = observability.WriteAudit(ctx, s.db, audit)
+	observability.RecordTransaction(ctx, audit.Action, err == nil, err, duration)
+	if err != nil {
 		return nil, err
 	}
 	return result, nil

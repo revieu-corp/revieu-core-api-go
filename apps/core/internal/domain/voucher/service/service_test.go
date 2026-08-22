@@ -25,6 +25,7 @@ func setupVoucherTestDB(t *testing.T) *gorm.DB {
 		&model.Store{},
 		&model.Coupon{},
 		&model.Voucher{},
+		&model.OperationalAuditLog{},
 	); err != nil {
 		t.Fatalf("failed to migrate test db: %v", err)
 	}
@@ -168,6 +169,7 @@ func TestVoucherServiceRedeemByMerchantAllowsSoftDeletedCoupon(t *testing.T) {
 	if refreshedCoupon.RedeemedCount != 1 {
 		t.Fatalf("expected redeemed_count=1, got %d", refreshedCoupon.RedeemedCount)
 	}
+
 }
 
 func TestPreviewRedeemByTokenAllowsIssuingMerchant(t *testing.T) {
@@ -518,6 +520,11 @@ func TestRedeemByTokenMarksVoucherUsed(t *testing.T) {
 	}
 	if refreshedCoupon.RedeemedCount != 1 {
 		t.Fatalf("expected redeemed_count=1, got %d", refreshedCoupon.RedeemedCount)
+	}
+
+	var audit model.OperationalAuditLog
+	if err := db.Where("action = ? AND target_id = ? AND result = ?", "voucher.redeem_by_token", voucher.ID, "success").First(&audit).Error; err != nil {
+		t.Fatalf("expected successful redemption audit: %v", err)
 	}
 }
 

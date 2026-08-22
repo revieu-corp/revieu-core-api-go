@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/observability"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
 )
@@ -199,6 +200,14 @@ func (s *CouponService) UpdateForMerchant(ctx context.Context, userID, couponID 
 // SetStatusForMerchant applies the explicit activate/deactivate lifecycle
 // actions and makes activation a verified-merchant operation.
 func (s *CouponService) SetStatusForMerchant(ctx context.Context, userID, couponID int64, status string) (*model.Coupon, error) {
+	started := time.Now()
+	coupon, err := s.setStatusForMerchant(ctx, userID, couponID, status)
+	duration := time.Since(started)
+	s.recordStatusOutcome(ctx, userID, couponID, status, "merchant", err, duration)
+	return coupon, err
+}
+
+func (s *CouponService) setStatusForMerchant(ctx context.Context, userID, couponID int64, status string) (*model.Coupon, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	if status != couponStatusActive && status != couponStatusDisabled {
 		return nil, ErrInvalidCouponInput
@@ -491,6 +500,14 @@ func (s *CouponService) UpdateForStore(ctx context.Context, userID, storeID, cou
 }
 
 func (s *CouponService) SetStatusForStore(ctx context.Context, userID, storeID, couponID int64, status string) (*model.Coupon, error) {
+	started := time.Now()
+	coupon, err := s.setStatusForStore(ctx, userID, storeID, couponID, status)
+	duration := time.Since(started)
+	s.recordStatusOutcome(ctx, userID, couponID, status, "store", err, duration)
+	return coupon, err
+}
+
+func (s *CouponService) setStatusForStore(ctx context.Context, userID, storeID, couponID int64, status string) (*model.Coupon, error) {
 	status = normalizeCouponStatus(status)
 	if status != couponStatusActive && status != couponStatusDisabled {
 		return nil, ErrInvalidCouponInput
@@ -511,6 +528,32 @@ func (s *CouponService) SetStatusForStore(ctx context.Context, userID, storeID, 
 	}
 	coupon.Status = status
 	return &coupon, nil
+}
+
+func (s *CouponService) recordStatusOutcome(ctx context.Context, userID, couponID int64, status, scope string, err error, duration time.Duration) {
+	status = normalizeCouponStatus(status)
+	action := "coupon.lifecycle"
+	if status == couponStatusActive {
+		action = "coupon.activate"
+	} else if status == couponStatusDisabled {
+		action = "coupon.deactivate"
+	}
+	audit := observability.AuditInput{
+		ActorID:    userID,
+		ActorRole:  "merchant",
+		Action:     action,
+		TargetType: "coupon",
+		TargetID:   couponID,
+		Result:     observability.ResultSuccess,
+		Details:    `{"scope":"` + scope + `","status":"` + status + `"}`,
+		Duration:   duration,
+	}
+	if err != nil {
+		audit.Result = observability.ResultFailure
+		audit.ErrorClass = observability.ClassifyError(err)
+	}
+	_ = observability.WriteAudit(ctx, s.db, audit)
+	observability.RecordTransaction(ctx, action, err == nil, err, duration)
 }
 
 func (s *CouponService) DeleteForStore(ctx context.Context, userID, storeID, couponID int64) error {

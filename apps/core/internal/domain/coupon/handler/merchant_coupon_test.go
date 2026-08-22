@@ -21,7 +21,7 @@ func setupMerchantCouponHandlerDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Merchant{}, &model.Store{}, &model.Coupon{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Merchant{}, &model.Store{}, &model.Coupon{}, &model.OperationalAuditLog{}); err != nil {
 		t.Fatalf("failed to migrate merchant coupon test db: %v", err)
 	}
 	return db
