@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/ai/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/ai/service"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/logger"
-	"github.com/gin-gonic/gin"
 )
 
 // Multipart and content limits applied before the request reaches the AI service.
@@ -39,12 +40,13 @@ var allowedImageContentTypes = map[string]struct{}{
 }
 
 type AIHandler struct {
-	svc *service.AIService
-	cfg config.GeminiConfig
+	svc   *service.AIService
+	cfg   config.GeminiConfig
+	quota *quotaStore
 }
 
 func NewAIHandler(svc *service.AIService, cfg config.GeminiConfig) *AIHandler {
-	return &AIHandler{svc: svc, cfg: cfg}
+	return &AIHandler{svc: svc, cfg: cfg, quota: newQuotaStore(database.DB, cfg.Quota)}
 }
 
 // Suggestions godoc
@@ -72,6 +74,19 @@ func NewAIHandler(svc *service.AIService, cfg config.GeminiConfig) *AIHandler {
 // @Failure 502 {object} map[string]string
 // @Router /ai/reviews/suggestions [post]
 func (h *AIHandler) Suggestions(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if h.quota != nil {
+		if err := h.quota.allow(c.Request.Context(), userID, c.ClientIP(), time.Now().UTC()); err != nil {
+			logger.Warn(c.Request.Context(), "ai.review.limit_denied", "error", err.Error(), "user_id", userID)
+			writePolishError(c, err)
+			return
+		}
+	}
+
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBytes)
 
 	if err := c.Request.ParseMultipartForm(maxRequestBytes); err != nil {
@@ -227,7 +242,18 @@ func readMultipartFile(h *multipart.FileHeader) ([]byte, error) {
 // writePolishError maps service/client error sentinels to HTTP statuses.
 func writePolishError(c *gin.Context, err error) {
 	var safety *service.SafetyBlockError
+	var quotaErr *quotaLimitError
 	switch {
+	case errors.As(err, &quotaErr):
+		retryAfter := quotaErr.RetryAfterSeconds()
+		c.Header("Retry-After", strconv.Itoa(retryAfter))
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":               quotaErr.Error(),
+			"code":                quotaErrorCode(quotaErr),
+			"retry_after_seconds": retryAfter,
+		})
+	case errors.Is(err, ErrAIQuotaStoreUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI quota service unavailable", "code": "AI_QUOTA_UNAVAILABLE"})
 	case errors.As(err, &safety):
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": safety.Error()})
 	case errors.Is(err, service.ErrGeminiRateLimited):
@@ -242,5 +268,22 @@ func writePolishError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+	}
+}
+
+func quotaErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrAIUserRateLimited):
+		return "AI_USER_RATE_LIMITED"
+	case errors.Is(err, ErrAIIPRateLimited):
+		return "AI_IP_RATE_LIMITED"
+	case errors.Is(err, ErrAIGlobalLimited):
+		return "AI_GLOBAL_RATE_LIMITED"
+	case errors.Is(err, ErrAIDailyQuota):
+		return "AI_DAILY_QUOTA_EXCEEDED"
+	case errors.Is(err, ErrAIMonthlyQuota):
+		return "AI_MONTHLY_QUOTA_EXCEEDED"
+	default:
+		return "AI_RATE_LIMITED"
 	}
 }

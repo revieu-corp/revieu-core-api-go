@@ -118,6 +118,14 @@ The Cloudflare KV adapter itself reads `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_KV_N
 
 Application variables use names such as `SERVER_PORT`, `DB_HOST`, `DB_PASSWORD`, `JWT_SECRET`, and `GEMINI_API_KEY`.
 
+The AI endpoint is protected by server-side, database-backed guardrails. The defaults are
+5 requests per user per minute, 20 per client-IP per minute, 100 globally per minute,
+50 requests per user per UTC day, and 500 per user per UTC month. Override them through
+`GEMINI_USER_RATE_LIMIT_PER_MINUTE`, `GEMINI_IP_RATE_LIMIT_PER_MINUTE`,
+`GEMINI_GLOBAL_RATE_LIMIT_PER_MINUTE`, `GEMINI_DAILY_QUOTA_PER_USER`, and
+`GEMINI_MONTHLY_QUOTA_PER_USER`. Set an individual value to `0` only when that dimension
+is intentionally disabled in an isolated environment.
+
 ## API Documentation
 
 API documentation is available in the `api/openapi/` directory.

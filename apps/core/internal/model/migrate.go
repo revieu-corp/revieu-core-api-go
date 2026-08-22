@@ -44,6 +44,8 @@ func All() []interface{} {
 		&Payment{},
 		// Media
 		&MediaUpload{},
+		// AI provider usage guardrails
+		&AIUsageWindow{},
 		// Messaging
 		&Conversation{},
 		&ConversationParticipant{},
