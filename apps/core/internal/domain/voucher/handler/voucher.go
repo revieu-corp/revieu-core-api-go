@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/voucher/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/voucher/service"
-	"github.com/gin-gonic/gin"
 )
 
 type VoucherHandler struct {
@@ -42,14 +42,20 @@ func NewVoucherHandler(svc *service.VoucherService, frontendURL string) *Voucher
 // @Failure 401 {object} map[string]string
 // @Router /vouchers [post]
 func (h *VoucherHandler) Create(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	var req service.CreateVoucherRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	v, err := h.svc.Create(c.Request.Context(), req)
+	v, err := h.svc.Create(c.Request.Context(), userID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status, message := voucherCreateErrorStatus(err)
+		c.JSON(status, gin.H{"error": message})
 		return
 	}
 	c.JSON(http.StatusCreated, v)
@@ -141,13 +147,19 @@ func (h *VoucherHandler) ByCode(c *gin.Context) {
 // @Failure 401 {object} map[string]string
 // @Router /vouchers/{id}/use [patch]
 func (h *VoucherHandler) Use(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := h.svc.Use(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.svc.Use(c.Request.Context(), userID, id); err != nil {
+		status, message := voucherUseErrorStatus(err)
+		c.JSON(status, gin.H{"error": message})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{})
@@ -164,16 +176,62 @@ func (h *VoucherHandler) Use(c *gin.Context) {
 // @Failure 401 {object} map[string]string
 // @Router /vouchers/{id}/status [patch]
 func (h *VoucherHandler) UpdateStatus(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := h.svc.UpdateStatus(c.Request.Context(), id, "used"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := h.svc.UpdateStatus(c.Request.Context(), userID, id, "used"); err != nil {
+		status, message := voucherUseErrorStatus(err)
+		c.JSON(status, gin.H{"error": message})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{})
+}
+
+func voucherCreateErrorStatus(err error) (int, string) {
+	switch {
+	case errors.Is(err, service.ErrVoucherInvalidInput):
+		return http.StatusBadRequest, "invalid voucher input"
+	case errors.Is(err, service.ErrVoucherNotFound):
+		return http.StatusNotFound, "coupon not found"
+	case errors.Is(err, service.ErrVoucherCouponInactive):
+		return http.StatusBadRequest, "coupon inactive"
+	case errors.Is(err, service.ErrVoucherCouponExpired):
+		return http.StatusBadRequest, "coupon expired"
+	case errors.Is(err, service.ErrVoucherCouponNotStarted):
+		return http.StatusBadRequest, "coupon not started"
+	case errors.Is(err, service.ErrVoucherPaymentRequired):
+		return http.StatusBadRequest, "paid coupons require an order payment"
+	case errors.Is(err, service.ErrVoucherSoldOut):
+		return http.StatusBadRequest, "coupon sold out"
+	case errors.Is(err, service.ErrVoucherPerUserLimit):
+		return http.StatusBadRequest, "coupon per-user limit exceeded"
+	default:
+		return http.StatusInternalServerError, "internal error"
+	}
+}
+
+func voucherUseErrorStatus(err error) (int, string) {
+	switch {
+	case errors.Is(err, service.ErrVoucherInvalidInput), errors.Is(err, service.ErrVoucherInvalidStatus):
+		return http.StatusBadRequest, "invalid voucher request"
+	case errors.Is(err, service.ErrVoucherNotFound):
+		return http.StatusNotFound, "voucher not found"
+	case errors.Is(err, service.ErrVoucherForbidden):
+		return http.StatusForbidden, "forbidden"
+	case errors.Is(err, service.ErrVoucherExpired):
+		return http.StatusBadRequest, "voucher expired"
+	case errors.Is(err, service.ErrVoucherNotRedeemable):
+		return http.StatusConflict, "voucher not redeemable"
+	default:
+		return http.StatusInternalServerError, "internal error"
+	}
 }
 
 // ShareVoucherEmail godoc

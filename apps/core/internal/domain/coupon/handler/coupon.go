@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon/service"
 )
 
 type CouponHandler struct {
@@ -163,6 +163,31 @@ func (h *CouponHandler) ListStoreCoupons(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": coupons})
+}
+
+// GetPublishedCoupon godoc
+// @Summary Get published coupon
+// @Description Returns one active, currently purchasable coupon by ID
+// @Tags coupon
+// @Produce json
+// @Param id path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /coupons/{id} [get]
+func (h *CouponHandler) GetPublishedCoupon(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	coupon, err := h.svc.GetPublished(c.Request.Context(), id)
+	if err != nil {
+		status, msg := couponErrorStatus(err)
+		c.JSON(status, gin.H{"error": msg})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": coupon})
 }
 
 // ValidateCoupon godoc

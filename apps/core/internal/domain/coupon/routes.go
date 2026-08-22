@@ -17,6 +17,7 @@ func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
 	// Public: validate and initiate payment
 	couponsPublic := r.Group("/coupons")
 	{
+		couponsPublic.GET("/:id", h.GetPublishedCoupon)
 		couponsPublic.POST("/:id/validate", h.Validate)
 		couponsPublic.POST("/:id/payment/initiate", h.InitiatePayment)
 	}

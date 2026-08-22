@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/config"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/testutil"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/token"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/gin-gonic/gin"
 )
 
 func setupAPITest(t *testing.T) (*gin.Engine, string) {
@@ -26,7 +26,7 @@ func setupAPITest(t *testing.T) (*gin.Engine, string) {
 	database.DB = db
 
 	cfg := &config.Config{
-		Server:      config.ServerConfig{APIBasePath: "/api/v1"},
+		Server:      config.ServerConfig{APIBasePath: "/api/v1", Mode: "debug"},
 		JWT:         config.JWTConfig{Secret: "test-secret", ExpireHour: 24},
 		FrontendURL: "https://merchant.revieu.test",
 	}
@@ -1195,8 +1195,33 @@ func TestCouponOrderPayAndMerchantRedeemFlow(t *testing.T) {
 
 func TestVoucherCreateAndList(t *testing.T) {
 	r, tok := setupAPITest(t)
+	db := database.DB
+	var ownerAuth model.UserAuth
+	if err := db.Where("identifier = ?", "user@example.com").First(&ownerAuth).Error; err != nil {
+		t.Fatalf("failed to load owner auth: %v", err)
+	}
+	merchant := model.Merchant{Name: "Free Coupon Merchant", UserID: &ownerAuth.UserID}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+	store := model.Store{MerchantID: merchant.ID, Name: "Free Coupon Store", Status: 1}
+	if err := db.Create(&store).Error; err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	coupon := model.Coupon{
+		MerchantID:    merchant.ID,
+		StoreID:       &store.ID,
+		Title:         "Free Coupon",
+		Type:          "free",
+		TotalQuantity: 5,
+		MaxPerUser:    1,
+		Status:        "active",
+	}
+	if err := db.Create(&coupon).Error; err != nil {
+		t.Fatalf("failed to create coupon: %v", err)
+	}
 
-	body := strings.NewReader(`{"couponId":"1","userId":"1","code":"ABC"}`)
+	body := strings.NewReader(fmt.Sprintf(`{"couponId":"%d","userId":"999999","code":"FORGED"}`, coupon.ID))
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/vouchers", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -1204,6 +1229,16 @@ func TestVoucherCreateAndList(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var created model.Voucher
+	if err := db.Order("id DESC").First(&created).Error; err != nil {
+		t.Fatalf("failed to load created voucher: %v", err)
+	}
+	if created.UserID != ownerAuth.UserID {
+		t.Fatalf("expected authenticated owner %d, got %d", ownerAuth.UserID, created.UserID)
+	}
+	if created.Code == "FORGED" {
+		t.Fatal("expected server-generated voucher code")
 	}
 
 	w = httptest.NewRecorder()
@@ -1542,8 +1577,17 @@ func TestMerchantVoucherPreviewThenRedeemByTokenFlow(t *testing.T) {
 
 func TestPaymentsCreateAndDetail(t *testing.T) {
 	r, tok := setupAPITest(t)
+	db := database.DB
+	var ownerAuth model.UserAuth
+	if err := db.Where("identifier = ?", "user@example.com").First(&ownerAuth).Error; err != nil {
+		t.Fatalf("failed to load owner auth: %v", err)
+	}
+	order := model.Order{UserID: ownerAuth.UserID, Quantity: 1, TotalPrice: 10, Status: "pending"}
+	if err := db.Create(&order).Error; err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
 
-	body := strings.NewReader(`{"amount":10,"currency":"USD","status":"pending"}`)
+	body := strings.NewReader(fmt.Sprintf(`{"order_id":%d,"payment_method":"mock","amount":999999,"currency":"EUR","status":"success"}`, order.ID))
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/payments", body)
 	req.Header.Set("Authorization", "Bearer "+tok)
@@ -1551,6 +1595,13 @@ func TestPaymentsCreateAndDetail(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var payment model.Payment
+	if err := db.Order("id DESC").First(&payment).Error; err != nil {
+		t.Fatalf("failed to load created payment: %v", err)
+	}
+	if payment.Amount != order.TotalPrice || payment.Currency != "USD" || payment.Status != "pending" {
+		t.Fatalf("expected server-derived pending payment, got %+v", payment)
 	}
 }
 

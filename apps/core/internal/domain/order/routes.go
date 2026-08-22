@@ -10,7 +10,7 @@ import (
 
 // RegisterRoutes registers order routes.
 func RegisterRoutes(r *gin.RouterGroup, cfg *config.Config) {
-	svc := service.NewOrderService(nil)
+	svc := service.NewOrderServiceForMode(nil, cfg.Server.Mode)
 	h := handler.NewOrderHandler(svc)
 
 	orders := r.Group("/orders", authorization.JWTAuth(cfg.JWT))

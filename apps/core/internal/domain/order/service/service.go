@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -26,20 +26,21 @@ const (
 )
 
 var (
-	ErrOrderNotFound       = errors.New("order not found")
-	ErrOrderForbidden      = errors.New("order forbidden")
-	ErrOrderInvalidInput   = errors.New("invalid order input")
-	ErrOrderInvalidState   = errors.New("invalid order state")
-	ErrStoreNotFound       = errors.New("store not found")
-	ErrStoreNotPublished   = errors.New("store not published")
-	ErrCouponNotFound      = errors.New("coupon not found")
-	ErrCouponInactive      = errors.New("coupon inactive")
-	ErrCouponNotStarted    = errors.New("coupon not started")
-	ErrCouponExpired       = errors.New("coupon expired")
-	ErrCouponSoldOut       = errors.New("coupon sold out")
-	ErrCouponNotStoreScope = errors.New("coupon must be store scoped")
-	ErrCouponStoreMismatch = errors.New("coupon store mismatch")
-	ErrCouponPerUserLimit  = errors.New("coupon per-user limit exceeded")
+	ErrOrderNotFound              = errors.New("order not found")
+	ErrOrderForbidden             = errors.New("order forbidden")
+	ErrOrderInvalidInput          = errors.New("invalid order input")
+	ErrOrderInvalidState          = errors.New("invalid order state")
+	ErrPaymentProviderUnavailable = errors.New("payment provider unavailable")
+	ErrStoreNotFound              = errors.New("store not found")
+	ErrStoreNotPublished          = errors.New("store not published")
+	ErrCouponNotFound             = errors.New("coupon not found")
+	ErrCouponInactive             = errors.New("coupon inactive")
+	ErrCouponNotStarted           = errors.New("coupon not started")
+	ErrCouponExpired              = errors.New("coupon expired")
+	ErrCouponSoldOut              = errors.New("coupon sold out")
+	ErrCouponNotStoreScope        = errors.New("coupon must be store scoped")
+	ErrCouponStoreMismatch        = errors.New("coupon store mismatch")
+	ErrCouponPerUserLimit         = errors.New("coupon per-user limit exceeded")
 )
 
 type CreateOrderInput struct {
@@ -58,14 +59,25 @@ type PayResult struct {
 }
 
 type OrderService struct {
-	db *gorm.DB
+	db                *gorm.DB
+	allowMockPayments bool
 }
 
 func NewOrderService(db *gorm.DB) *OrderService {
+	return NewOrderServiceWithMockPayments(db, false)
+}
+
+func NewOrderServiceWithMockPayments(db *gorm.DB, allowMockPayments bool) *OrderService {
 	if db == nil {
 		db = database.DB
 	}
-	return &OrderService{db: db}
+	return &OrderService{db: db, allowMockPayments: allowMockPayments}
+}
+
+func NewOrderServiceForMode(db *gorm.DB, mode string) *OrderService {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	allowMockPayments := mode == "debug" || mode == "development" || mode == "dev" || mode == "test"
+	return NewOrderServiceWithMockPayments(db, allowMockPayments)
 }
 
 func (s *OrderService) Create(ctx context.Context, userID int64, input CreateOrderInput) (*model.Order, error) {
@@ -177,6 +189,9 @@ func (s *OrderService) Pay(ctx context.Context, userID, orderID int64) (*PayResu
 		}
 		if order.Status != orderStatusPending {
 			return ErrOrderInvalidState
+		}
+		if !s.allowMockPayments {
+			return ErrPaymentProviderUnavailable
 		}
 		if order.Quantity <= 0 {
 			return ErrOrderInvalidState

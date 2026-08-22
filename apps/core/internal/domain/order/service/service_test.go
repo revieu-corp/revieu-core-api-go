@@ -12,7 +12,7 @@ func setupOrderServiceTest(t *testing.T) (*OrderService, *model.User, *model.Mer
 	t.Helper()
 
 	db := testutil.SetupTestDB(t)
-	svc := NewOrderService(db)
+	svc := NewOrderServiceWithMockPayments(db, true)
 
 	buyer := &model.User{Role: "user", Status: 0}
 	if err := db.Create(buyer).Error; err != nil {
@@ -137,5 +137,36 @@ func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {
 		if firstTokens[i] != secondTokens[i] {
 			t.Fatalf("expected token %d to remain stable, got first=%q second=%q", i, firstTokens[i], secondTokens[i])
 		}
+	}
+}
+
+func TestPayRejectsMockPaymentOutsideExplicitDevelopmentMode(t *testing.T) {
+	svc, buyer, _, _, coupon := setupOrderServiceTest(t)
+	order, err := svc.Create(context.Background(), buyer.ID, CreateOrderInput{
+		CouponID: coupon.ID,
+		Quantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("failed to create order: %v", err)
+	}
+
+	productionSvc := NewOrderService(svc.db)
+	if _, err := productionSvc.Pay(context.Background(), buyer.ID, order.ID); err != ErrPaymentProviderUnavailable {
+		t.Fatalf("expected mock payment to be unavailable, got %v", err)
+	}
+
+	var refreshedOrder model.Order
+	if err := svc.db.First(&refreshedOrder, order.ID).Error; err != nil {
+		t.Fatalf("failed to reload order: %v", err)
+	}
+	if refreshedOrder.Status != orderStatusPending {
+		t.Fatalf("expected order to remain pending, got %q", refreshedOrder.Status)
+	}
+	var voucherCount int64
+	if err := svc.db.Model(&model.Voucher{}).Where("order_id = ?", order.ID).Count(&voucherCount).Error; err != nil {
+		t.Fatalf("failed to count vouchers: %v", err)
+	}
+	if voucherCount != 0 {
+		t.Fatalf("expected no vouchers after rejected payment, got %d", voucherCount)
 	}
 }

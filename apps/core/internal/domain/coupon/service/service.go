@@ -199,6 +199,17 @@ func (s *CouponService) ListPublishedByStore(ctx context.Context, storeID int64)
 	return coupons, nil
 }
 
+func (s *CouponService) GetPublished(ctx context.Context, couponID int64) (*model.Coupon, error) {
+	coupon, err := s.loadCoupon(ctx, couponID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.ensureCouponPurchasable(ctx, coupon); err != nil {
+		return nil, err
+	}
+	return coupon, nil
+}
+
 func (s *CouponService) Validate(ctx context.Context, id int64, input ValidateInput) (*ValidateResult, error) {
 	quantity := input.Quantity
 	if quantity <= 0 {

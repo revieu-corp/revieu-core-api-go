@@ -69,18 +69,14 @@ func TestVoucherServiceCreateAssignsUniqueScanTokens(t *testing.T) {
 		t.Fatalf("failed to create coupon: %v", err)
 	}
 
-	first, err := svc.Create(context.Background(), CreateVoucherRequest{
+	first, err := svc.Create(context.Background(), user.ID, CreateVoucherRequest{
 		CouponID: strconv.FormatInt(coupon.ID, 10),
-		UserID:   strconv.FormatInt(user.ID, 10),
-		Code:     "CREATE-ONE",
 	})
 	if err != nil {
 		t.Fatalf("failed to create first voucher: %v", err)
 	}
-	second, err := svc.Create(context.Background(), CreateVoucherRequest{
+	second, err := svc.Create(context.Background(), user.ID, CreateVoucherRequest{
 		CouponID: strconv.FormatInt(coupon.ID, 10),
-		UserID:   strconv.FormatInt(user.ID, 10),
-		Code:     "CREATE-TWO",
 	})
 	if err != nil {
 		t.Fatalf("failed to create second voucher: %v", err)
@@ -94,6 +90,59 @@ func TestVoucherServiceCreateAssignsUniqueScanTokens(t *testing.T) {
 	}
 	if first.ScanToken == second.ScanToken {
 		t.Fatalf("expected voucher scan tokens to be unique, got %q", first.ScanToken)
+	}
+}
+
+func TestVoucherUseRequiresOwnerAndEnforcesLifecycle(t *testing.T) {
+	db := setupVoucherTestDB(t)
+	svc := NewVoucherService(db)
+	owner := model.User{ID: 1101, Role: "user", Status: 0}
+	other := model.User{ID: 1102, Role: "user", Status: 0}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatalf("failed to create owner: %v", err)
+	}
+	if err := db.Create(&other).Error; err != nil {
+		t.Fatalf("failed to create other user: %v", err)
+	}
+	coupon := model.Coupon{
+		MerchantID:    1103,
+		Title:         "Lifecycle Coupon",
+		Type:          "free",
+		TotalQuantity: 5,
+		MaxPerUser:    1,
+		Status:        "active",
+	}
+	if err := db.Create(&coupon).Error; err != nil {
+		t.Fatalf("failed to create coupon: %v", err)
+	}
+	voucher := model.Voucher{Code: "lifecycle-voucher", CouponID: coupon.ID, UserID: owner.ID, Status: "active"}
+	if err := db.Create(&voucher).Error; err != nil {
+		t.Fatalf("failed to create voucher: %v", err)
+	}
+
+	if err := svc.Use(context.Background(), other.ID, voucher.ID); err != ErrVoucherForbidden {
+		t.Fatalf("expected cross-user use to be forbidden, got %v", err)
+	}
+	if err := svc.Use(context.Background(), owner.ID, voucher.ID); err != nil {
+		t.Fatalf("owner use failed: %v", err)
+	}
+	if err := svc.Use(context.Background(), owner.ID, voucher.ID); err != ErrVoucherNotRedeemable {
+		t.Fatalf("expected repeated use to be rejected, got %v", err)
+	}
+
+	var refreshed model.Voucher
+	if err := db.First(&refreshed, voucher.ID).Error; err != nil {
+		t.Fatalf("failed to reload voucher: %v", err)
+	}
+	if refreshed.Status != "used" || refreshed.RedeemedAt == nil || refreshed.RedeemedBy == nil || *refreshed.RedeemedBy != owner.ID {
+		t.Fatalf("expected redeemed ownership fields, got %+v", refreshed)
+	}
+	var refreshedCoupon model.Coupon
+	if err := db.First(&refreshedCoupon, coupon.ID).Error; err != nil {
+		t.Fatalf("failed to reload coupon: %v", err)
+	}
+	if refreshedCoupon.RedeemedCount != 1 {
+		t.Fatalf("expected redeemed count 1, got %d", refreshedCoupon.RedeemedCount)
 	}
 }
 

@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
@@ -16,16 +18,22 @@ import (
 )
 
 var (
-	ErrVoucherNotFound      = errors.New("voucher not found")
-	ErrVoucherForbidden     = errors.New("voucher forbidden")
-	ErrVoucherNotRedeemable = errors.New("voucher not redeemable")
-	ErrVoucherExpired       = errors.New("voucher expired")
+	ErrVoucherNotFound         = errors.New("voucher not found")
+	ErrVoucherForbidden        = errors.New("voucher forbidden")
+	ErrVoucherNotRedeemable    = errors.New("voucher not redeemable")
+	ErrVoucherExpired          = errors.New("voucher expired")
+	ErrVoucherInvalidInput     = errors.New("invalid voucher input")
+	ErrVoucherPaymentRequired  = errors.New("paid coupons require an order payment")
+	ErrVoucherCouponInactive   = errors.New("coupon inactive")
+	ErrVoucherCouponExpired    = errors.New("coupon expired")
+	ErrVoucherCouponNotStarted = errors.New("coupon not started")
+	ErrVoucherSoldOut          = errors.New("voucher coupon sold out")
+	ErrVoucherPerUserLimit     = errors.New("voucher per-user limit exceeded")
+	ErrVoucherInvalidStatus    = errors.New("invalid voucher status")
 )
 
 type CreateVoucherRequest struct {
 	CouponID string `json:"couponId"`
-	UserID   string `json:"userId"`
-	Code     string `json:"code"`
 }
 
 type RedeemPreview struct {
@@ -54,31 +62,85 @@ func NewVoucherService(db *gorm.DB) *VoucherService {
 	return &VoucherService{db: db}
 }
 
-func (s *VoucherService) Create(ctx context.Context, req CreateVoucherRequest) (model.Voucher, error) {
-	couponID, _ := strconv.ParseInt(req.CouponID, 10, 64)
-	userID, _ := strconv.ParseInt(req.UserID, 10, 64)
-
-	// Look up coupon to get merchant ID
-	var coupon model.Coupon
-	var merchantID *int64
-	if err := s.db.WithContext(ctx).First(&coupon, couponID).Error; err == nil {
-		merchantID = &coupon.MerchantID
+func (s *VoucherService) Create(ctx context.Context, userID int64, req CreateVoucherRequest) (model.Voucher, error) {
+	couponID, err := strconv.ParseInt(strings.TrimSpace(req.CouponID), 10, 64)
+	if userID <= 0 || err != nil || couponID <= 0 {
+		return model.Voucher{}, ErrVoucherInvalidInput
 	}
 
-	scanToken, err := generateVoucherScanToken()
-	if err != nil {
-		return model.Voucher{}, err
-	}
+	var voucher model.Voucher
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var coupon model.Coupon
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&coupon, couponID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrVoucherNotFound
+			}
+			return err
+		}
+		if coupon.Status != "active" {
+			return ErrVoucherCouponInactive
+		}
+		now := time.Now()
+		if coupon.ValidFrom != nil && coupon.ValidFrom.After(now) {
+			return ErrVoucherCouponNotStarted
+		}
+		if coupon.ValidUntil != nil && coupon.ValidUntil.Before(now) {
+			return ErrVoucherCouponExpired
+		}
+		if !coupon.ExpiryDate.IsZero() && coupon.ExpiryDate.Before(now) {
+			return ErrVoucherCouponExpired
+		}
+		if coupon.Price > 0 || strings.EqualFold(coupon.Type, "paid") || strings.EqualFold(coupon.CouponType, "paid") {
+			return ErrVoucherPaymentRequired
+		}
+		if coupon.TotalQuantity <= coupon.ClaimedCount {
+			return ErrVoucherSoldOut
+		}
 
-	v := model.Voucher{
-		Code:       req.Code,
-		ScanToken:  scanToken,
-		CouponID:   couponID,
-		UserID:     userID,
-		MerchantID: merchantID,
-		Status:     "active",
-	}
-	return v, s.db.WithContext(ctx).Create(&v).Error
+		if coupon.MaxPerUser > 0 {
+			var claimedByUser int64
+			if err := tx.Model(&model.Voucher{}).
+				Where("user_id = ? AND coupon_id = ?", userID, coupon.ID).
+				Count(&claimedByUser).Error; err != nil {
+				return err
+			}
+			if int(claimedByUser) >= coupon.MaxPerUser {
+				return ErrVoucherPerUserLimit
+			}
+		}
+
+		updated := tx.Model(&model.Coupon{}).
+			Where("id = ? AND (total_quantity - claimed_count) > 0", coupon.ID).
+			UpdateColumn("claimed_count", gorm.Expr("claimed_count + 1"))
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected == 0 {
+			return ErrVoucherSoldOut
+		}
+
+		scanToken, err := generateVoucherScanToken()
+		if err != nil {
+			return err
+		}
+		merchantID := coupon.MerchantID
+		voucher = model.Voucher{
+			Code:       generateVoucherCode(),
+			ScanToken:  scanToken,
+			CouponID:   coupon.ID,
+			UserID:     userID,
+			MerchantID: &merchantID,
+			Status:     "active",
+			ExpiryDate: coupon.ExpiryDate,
+			ValidFrom:  coupon.ValidFrom,
+			ValidUntil: coupon.ValidUntil,
+		}
+		if voucher.ExpiryDate.IsZero() && voucher.ValidUntil != nil {
+			voucher.ExpiryDate = *voucher.ValidUntil
+		}
+		return tx.Create(&voucher).Error
+	})
+	return voucher, err
 }
 
 func (s *VoucherService) List(ctx context.Context, userID int64) ([]model.Voucher, error) {
@@ -121,12 +183,56 @@ func (s *VoucherService) ByCodeForUser(ctx context.Context, userID int64, code s
 	return &v, nil
 }
 
-func (s *VoucherService) Use(ctx context.Context, id int64) error {
-	return s.db.WithContext(ctx).Model(&model.Voucher{}).Where("id = ?", id).UpdateColumn("status", "used").Error
+func (s *VoucherService) Use(ctx context.Context, userID, id int64) error {
+	if userID <= 0 || id <= 0 {
+		return ErrVoucherInvalidInput
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var voucher model.Voucher
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&voucher, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrVoucherNotFound
+			}
+			return err
+		}
+		if voucher.UserID != userID {
+			return ErrVoucherForbidden
+		}
+		if voucher.Status != "active" {
+			return ErrVoucherNotRedeemable
+		}
+		now := time.Now()
+		if voucher.ValidUntil != nil && voucher.ValidUntil.Before(now) {
+			return ErrVoucherExpired
+		}
+		if !voucher.ExpiryDate.IsZero() && voucher.ExpiryDate.Before(now) {
+			return ErrVoucherExpired
+		}
+
+		updated := tx.Model(&model.Voucher{}).
+			Where("id = ? AND user_id = ? AND status = ?", id, userID, "active").
+			Updates(map[string]interface{}{
+				"status":      "used",
+				"redeemed_at": now,
+				"redeemed_by": userID,
+			})
+		if updated.Error != nil {
+			return updated.Error
+		}
+		if updated.RowsAffected == 0 {
+			return ErrVoucherNotRedeemable
+		}
+		return tx.Unscoped().Model(&model.Coupon{}).
+			Where("id = ?", voucher.CouponID).
+			UpdateColumn("redeemed_count", gorm.Expr("redeemed_count + 1")).Error
+	})
 }
 
-func (s *VoucherService) UpdateStatus(ctx context.Context, id int64, status string) error {
-	return s.db.WithContext(ctx).Model(&model.Voucher{}).Where("id = ?", id).UpdateColumn("status", status).Error
+func (s *VoucherService) UpdateStatus(ctx context.Context, userID, id int64, status string) error {
+	if status != "used" {
+		return ErrVoucherInvalidStatus
+	}
+	return s.Use(ctx, userID, id)
 }
 
 func (s *VoucherService) PreviewRedeemByToken(ctx context.Context, merchantUserID int64, scanToken string) (*RedeemPreview, error) {
@@ -322,4 +428,9 @@ func generateVoucherScanToken() (string, error) {
 		return "", fmt.Errorf("generate voucher scan token: %w", err)
 	}
 	return "vst_" + base64.RawURLEncoding.EncodeToString(raw[:]), nil
+}
+
+func generateVoucherCode() string {
+	raw := strings.ToUpper(strings.ReplaceAll(uuid.NewString(), "-", ""))
+	return "VCH-" + raw[:12]
 }

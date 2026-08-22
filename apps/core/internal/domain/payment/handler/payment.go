@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/payment/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/payment/service"
 )
 
 type PaymentHandler struct {
@@ -31,14 +32,20 @@ func NewPaymentHandler(svc *service.PaymentService) *PaymentHandler {
 // @Failure 401 {object} map[string]string
 // @Router /payments [post]
 func (h *PaymentHandler) Create(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	var req service.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	p, err := h.svc.Create(c.Request.Context(), req)
+	p, err := h.svc.Create(c.Request.Context(), userID, req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		status, message := paymentErrorStatus(err)
+		c.JSON(status, gin.H{"error": message})
 		return
 	}
 	c.JSON(http.StatusCreated, p)
@@ -56,15 +63,35 @@ func (h *PaymentHandler) Create(c *gin.Context) {
 // @Failure 404 {object} map[string]string
 // @Router /payments/{id} [get]
 func (h *PaymentHandler) Detail(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	p, err := h.svc.Detail(c.Request.Context(), id)
+	p, err := h.svc.Detail(c.Request.Context(), userID, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
 	c.JSON(http.StatusOK, p)
+}
+
+func paymentErrorStatus(err error) (int, string) {
+	switch {
+	case errors.Is(err, service.ErrPaymentInvalidInput):
+		return http.StatusBadRequest, "invalid payment input"
+	case errors.Is(err, service.ErrPaymentOrderNotFound):
+		return http.StatusNotFound, "order not found"
+	case errors.Is(err, service.ErrPaymentForbidden):
+		return http.StatusForbidden, "forbidden"
+	case errors.Is(err, service.ErrPaymentOrderAlreadyPaid):
+		return http.StatusConflict, "order already paid"
+	default:
+		return http.StatusInternalServerError, "internal error"
+	}
 }
