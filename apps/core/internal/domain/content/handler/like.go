@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/service"
 	"github.com/gin-gonic/gin"
+	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/service"
 )
 
 type LikeHandler struct {
@@ -32,7 +32,7 @@ func NewLikeHandler(svc *service.ContentService) *LikeHandler {
 func (h *LikeHandler) ListMyLikes(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	cursor, limit := parseCursorLimit(c)
-	items, total, err := h.svc.ListLikes(c.Request.Context(), userID, cursor, limit)
+	items, total, next, err := h.svc.ListLikes(c.Request.Context(), userID, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -51,6 +51,6 @@ func (h *LikeHandler) ListMyLikes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"items":  respItems,
 		"total":  total,
-		"cursor": nextCursor(items),
+		"cursor": next,
 	})
 }

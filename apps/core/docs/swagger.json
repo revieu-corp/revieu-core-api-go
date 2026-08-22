@@ -1007,12 +1007,34 @@
                     "feed"
                 ],
                 "summary": "Get home feed",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Opaque cursor for the next page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
+                            "$ref": "#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
@@ -5344,6 +5366,40 @@
                     "type": "array",
                     "items": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedItem": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedResponse": {
+            "type": "object",
+            "properties": {
+                "cursor": {
+                    "type": "string"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedItem"
                     }
                 }
             }

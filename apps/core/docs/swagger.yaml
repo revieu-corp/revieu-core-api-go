@@ -7,6 +7,28 @@ definitions:
           type: string
         type: array
     type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedItem:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      image:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedResponse:
+    properties:
+      cursor:
+        type: string
+      data:
+        items:
+          $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedItem'
+        type: array
+    type: object
   github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_media_dto.FileRequest:
     properties:
       content_type:
@@ -1211,13 +1233,27 @@ paths:
   /feed/home:
     get:
       description: Returns the home feed items
+      parameters:
+      - description: Opaque cursor for the next page
+        in: query
+        name: cursor
+        type: string
+      - description: Page size (1-100, default 20)
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
+            $ref: '#/definitions/github_com_revieu-corp_revieu-core-api-go_apps_core_internal_domain_feed_dto.FeedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
             type: object
         "500":
           description: Internal Server Error

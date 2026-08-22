@@ -3,10 +3,10 @@ package handler
 import (
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/content/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 )
 
 type FavoriteHandler struct {
@@ -38,7 +38,7 @@ func (h *FavoriteHandler) ListMyFavorites(c *gin.Context) {
 	targetType := c.Query("type")
 	cursor, limit := parseCursorLimit(c)
 
-	items, total, err := h.svc.ListFavorites(c.Request.Context(), userID, targetType, cursor, limit)
+	items, total, next, err := h.svc.ListFavorites(c.Request.Context(), userID, targetType, cursor, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -96,6 +96,6 @@ func (h *FavoriteHandler) ListMyFavorites(c *gin.Context) {
 		respItems = append(respItems, fav)
 	}
 
-	resp := dto.FavoriteListResponse{Items: respItems, Total: int(total), Cursor: nextCursor(items)}
+	resp := dto.FavoriteListResponse{Items: respItems, Total: int(total), Cursor: next}
 	c.JSON(http.StatusOK, resp)
 }

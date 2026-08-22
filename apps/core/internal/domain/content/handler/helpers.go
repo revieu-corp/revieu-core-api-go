@@ -73,7 +73,3 @@ func parseJSONStrings(raw string) []string {
 	}
 	return values
 }
-
-func nextCursor[T any](items []T) *int64 {
-	return nil
-}
