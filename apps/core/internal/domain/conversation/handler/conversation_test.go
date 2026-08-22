@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/conversation/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -131,6 +131,80 @@ func TestConversationHandlerListReturnsConversationSummaries(t *testing.T) {
 	}
 	if response.Data[0].UnreadCount != 1 {
 		t.Fatalf("expected unread_count=1, got %d", response.Data[0].UnreadCount)
+	}
+}
+
+func TestConversationHandlerUpdateSettingsValidatesInputAndMembership(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db := setupConversationTestDB(t)
+	seedConversationFixture(t, db)
+	if err := db.Create(&model.User{ID: 503, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create unrelated user: %v", err)
+	}
+	h := NewConversationHandler(service.NewConversationService(db))
+
+	update := func(userID int64, conversationID string, payload string, authenticated bool) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: conversationID}}
+		c.Request = httptest.NewRequest(http.MethodPatch, "/conversations/"+conversationID+"/settings", bytes.NewBufferString(payload))
+		c.Request.Header.Set("Content-Type", "application/json")
+		if authenticated {
+			c.Set("user_id", userID)
+		}
+		h.UpdateSettings(c)
+		return recorder
+	}
+
+	valid := update(501, "9001", `{"is_muted":true}`, true)
+	if valid.Code != http.StatusOK {
+		t.Fatalf("expected valid settings update to return 200, got %d: %s", valid.Code, valid.Body.String())
+	}
+	var response struct {
+		Data struct {
+			IsMuted bool `json:"is_muted"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(valid.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode settings response: %v", err)
+	}
+	if !response.Data.IsMuted {
+		t.Fatal("expected response to reflect is_muted=true")
+	}
+
+	for _, payload := range []string{`{}`, `{"is_muted":null}`} {
+		recorder := update(501, "9001", payload, true)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected missing setting %q to return 400, got %d: %s", payload, recorder.Code, recorder.Body.String())
+		}
+	}
+
+	for _, testCase := range []struct {
+		name           string
+		userID         int64
+		conversationID string
+		authenticated  bool
+		expected       int
+	}{
+		{name: "non-member", userID: 503, conversationID: "9001", authenticated: true, expected: http.StatusForbidden},
+		{name: "missing-conversation", userID: 501, conversationID: "9999", authenticated: true, expected: http.StatusNotFound},
+		{name: "unauthenticated", userID: 0, conversationID: "9001", authenticated: false, expected: http.StatusUnauthorized},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := update(testCase.userID, testCase.conversationID, `{"is_muted":false}`, testCase.authenticated)
+			if recorder.Code != testCase.expected {
+				t.Fatalf("expected status %d, got %d: %s", testCase.expected, recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+
+	var membership model.ConversationParticipant
+	if err := db.Where("conversation_id = ? AND user_id = ?", 9001, 501).First(&membership).Error; err != nil {
+		t.Fatalf("failed to load membership: %v", err)
+	}
+	if !membership.IsMuted {
+		t.Fatal("expected invalid and unauthorized updates not to reset is_muted")
 	}
 }
 
