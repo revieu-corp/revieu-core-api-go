@@ -26,6 +26,18 @@ type ConversationSummary struct {
 	IsMuted       bool       `json:"is_muted"`
 }
 
+const (
+	DefaultConversationListLimit = 20
+	MaxConversationListLimit     = 100
+)
+
+// ConversationListQuery controls the authenticated conversation list.
+// Cursor is the last conversation id returned by the previous page.
+type ConversationListQuery struct {
+	Limit  int
+	Cursor *int64
+}
+
 type ConversationMessage struct {
 	ID             int64     `json:"id"`
 	ConversationID int64     `json:"conversation_id"`
@@ -64,44 +76,69 @@ func NewConversationService(db *gorm.DB) *ConversationService {
 	return &ConversationService{db: db}
 }
 
-func (s *ConversationService) List(ctx context.Context, userID int64) ([]ConversationSummary, error) {
-	memberships, err := s.loadMemberships(ctx, userID)
+func (s *ConversationService) List(ctx context.Context, userID int64, query ConversationListQuery) ([]ConversationSummary, *int64, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = DefaultConversationListLimit
+	}
+	if limit > MaxConversationListLimit {
+		limit = MaxConversationListLimit
+	}
+
+	memberships, nextCursor, err := s.loadMemberships(ctx, userID, query.Cursor, limit)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(memberships) == 0 {
-		return []ConversationSummary{}, nil
+		return []ConversationSummary{}, nil, nil
 	}
 
 	conversationIDs := make([]int64, 0, len(memberships))
-	membershipByConversation := make(map[int64]model.ConversationParticipant, len(memberships))
 	for _, membership := range memberships {
 		conversationIDs = append(conversationIDs, membership.ConversationID)
-		membershipByConversation[membership.ConversationID] = membership
 	}
 
 	var conversations []model.Conversation
 	if err := s.db.WithContext(ctx).
 		Preload("Participants.User.Profile").
-		Preload("Messages", func(db *gorm.DB) *gorm.DB {
-			return db.Order("created_at desc")
-		}).
 		Where("id IN ?", conversationIDs).
-		Order("updated_at desc").
 		Find(&conversations).Error; err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	conversationByID := make(map[int64]model.Conversation, len(conversations))
+	for _, conversation := range conversations {
+		conversationByID[conversation.ID] = conversation
+	}
+
+	latestMessages, err := s.loadLatestMessages(ctx, conversationIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	unreadCounts, err := s.loadUnreadCounts(ctx, userID, conversationIDs)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	summaries := make([]ConversationSummary, 0, len(conversations))
-	for _, conversation := range conversations {
-		summary, err := s.buildConversationSummary(ctx, userID, conversation, membershipByConversation[conversation.ID])
-		if err != nil {
-			return nil, err
+	for _, membership := range memberships {
+		conversation, exists := conversationByID[membership.ConversationID]
+		if !exists {
+			continue
+		}
+		summary := s.buildConversationSummary(
+			userID,
+			conversation,
+			membership,
+			latestMessages[conversation.ID],
+			unreadCounts[conversation.ID],
+		)
+		if summary.ID == 0 {
+			continue
 		}
 		summaries = append(summaries, summary)
 	}
 
-	return summaries, nil
+	return summaries, nextCursor, nil
 }
 
 func (s *ConversationService) Create(ctx context.Context, userID int64, input CreateConversationInput) (*ConversationSummary, error) {
@@ -165,7 +202,7 @@ func (s *ConversationService) Messages(ctx context.Context, userID, conversation
 	if err := s.db.WithContext(ctx).
 		Preload("Sender.Profile").
 		Where("conversation_id = ?", conversationID).
-		Order("created_at asc").
+		Order("created_at asc, id asc").
 		Find(&messages).Error; err != nil {
 		return nil, err
 	}
@@ -250,9 +287,6 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, userID, conver
 	var conversation model.Conversation
 	if err := s.db.WithContext(ctx).
 		Preload("Participants.User.Profile").
-		Preload("Messages", func(db *gorm.DB) *gorm.DB {
-			return db.Order("created_at desc")
-		}).
 		First(&conversation, conversationID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrConversationNotFound
@@ -260,21 +294,46 @@ func (s *ConversationService) UpdateSettings(ctx context.Context, userID, conver
 		return nil, err
 	}
 
-	summary, err := s.buildConversationSummary(ctx, userID, conversation, membership)
+	latestMessages, err := s.loadLatestMessages(ctx, []int64{conversationID})
 	if err != nil {
 		return nil, err
 	}
+	unreadCounts, err := s.loadUnreadCounts(ctx, userID, []int64{conversationID})
+	if err != nil {
+		return nil, err
+	}
+	summary := s.buildConversationSummary(userID, conversation, membership, latestMessages[conversationID], unreadCounts[conversationID])
 	return &summary, nil
 }
 
-func (s *ConversationService) loadMemberships(ctx context.Context, userID int64) ([]model.ConversationParticipant, error) {
+func (s *ConversationService) loadMemberships(ctx context.Context, userID int64, cursor *int64, limit int) ([]model.ConversationParticipant, *int64, error) {
 	var memberships []model.ConversationParticipant
-	if err := s.db.WithContext(ctx).
+	query := s.db.WithContext(ctx).
+		Model(&model.ConversationParticipant{}).
+		Select("conversation_participants.*").
+		Joins("JOIN conversations ON conversations.id = conversation_participants.conversation_id").
 		Where("user_id = ?", userID).
-		Find(&memberships).Error; err != nil {
-		return nil, err
+		Order("conversations.updated_at DESC, conversations.id DESC").
+		Limit(limit + 1)
+	if cursor != nil {
+		query = query.Where(
+			"(conversations.updated_at < (SELECT updated_at FROM conversations WHERE id = ?) OR (conversations.updated_at = (SELECT updated_at FROM conversations WHERE id = ?) AND conversations.id < ?))",
+			*cursor,
+			*cursor,
+			*cursor,
+		)
 	}
-	return memberships, nil
+	if err := query.Find(&memberships).Error; err != nil {
+		return nil, nil, err
+	}
+
+	var nextCursor *int64
+	if len(memberships) > limit {
+		value := memberships[limit-1].ConversationID
+		nextCursor = &value
+		memberships = memberships[:limit]
+	}
+	return memberships, nextCursor, nil
 }
 
 func (s *ConversationService) membershipForUser(ctx context.Context, userID, conversationID int64) (model.ConversationParticipant, error) {
@@ -291,22 +350,12 @@ func (s *ConversationService) membershipForUser(ctx context.Context, userID, con
 }
 
 func (s *ConversationService) buildConversationSummary(
-	ctx context.Context,
 	userID int64,
 	conversation model.Conversation,
 	membership model.ConversationParticipant,
-) (ConversationSummary, error) {
-	var unreadCount int64
-	query := s.db.WithContext(ctx).
-		Model(&model.Message{}).
-		Where("conversation_id = ? AND sender_id <> ?", conversation.ID, userID)
-	if !membership.LastReadAt.IsZero() {
-		query = query.Where("created_at > ?", membership.LastReadAt)
-	}
-	if err := query.Count(&unreadCount).Error; err != nil {
-		return ConversationSummary{}, err
-	}
-
+	lastMessage *model.Message,
+	unreadCount int64,
+) ConversationSummary {
 	summary := ConversationSummary{
 		ID:          conversation.ID,
 		Type:        conversation.Type,
@@ -315,10 +364,10 @@ func (s *ConversationService) buildConversationSummary(
 		IsMuted:     membership.IsMuted,
 	}
 
-	if len(conversation.Messages) > 0 {
-		lastMessage := conversation.Messages[0]
+	if lastMessage != nil {
 		summary.LastMessage = lastMessage.Content
-		summary.LastMessageAt = &lastMessage.CreatedAt
+		lastMessageAt := lastMessage.CreatedAt
+		summary.LastMessageAt = &lastMessageAt
 	}
 
 	if summary.Title == "" {
@@ -326,7 +375,66 @@ func (s *ConversationService) buildConversationSummary(
 	}
 	summary.AvatarURL = otherParticipantAvatar(conversation.Participants, userID)
 
-	return summary, nil
+	return summary
+}
+
+func (s *ConversationService) loadLatestMessages(ctx context.Context, conversationIDs []int64) (map[int64]*model.Message, error) {
+	latest := make(map[int64]*model.Message, len(conversationIDs))
+	if len(conversationIDs) == 0 {
+		return latest, nil
+	}
+
+	var latestIDs []int64
+	query := s.db.WithContext(ctx).
+		Table("messages AS m").
+		Select("m.id").
+		Where("m.conversation_id IN ?", conversationIDs).
+		Where("m.id = (SELECT m2.id FROM messages AS m2 WHERE m2.conversation_id = m.conversation_id ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)")
+	if err := query.Find(&latestIDs).Error; err != nil {
+		return nil, err
+	}
+	if len(latestIDs) == 0 {
+		return latest, nil
+	}
+
+	var messages []model.Message
+	if err := s.db.WithContext(ctx).
+		Preload("Sender.Profile").
+		Where("id IN ?", latestIDs).
+		Find(&messages).Error; err != nil {
+		return nil, err
+	}
+	for index := range messages {
+		message := messages[index]
+		latest[message.ConversationID] = &message
+	}
+	return latest, nil
+}
+
+func (s *ConversationService) loadUnreadCounts(ctx context.Context, userID int64, conversationIDs []int64) (map[int64]int64, error) {
+	counts := make(map[int64]int64, len(conversationIDs))
+	if len(conversationIDs) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		ConversationID int64 `gorm:"column:conversation_id"`
+		Count          int64 `gorm:"column:unread_count"`
+	}
+	if err := s.db.WithContext(ctx).
+		Table("messages AS m").
+		Select("m.conversation_id, COUNT(*) AS unread_count").
+		Joins("JOIN conversation_participants AS cp ON cp.conversation_id = m.conversation_id AND cp.user_id = ?", userID).
+		Where("m.conversation_id IN ? AND m.sender_id <> ?", conversationIDs, userID).
+		Where("cp.last_read_at IS NULL OR m.created_at > cp.last_read_at").
+		Group("m.conversation_id").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		counts[row.ConversationID] = row.Count
+	}
+	return counts, nil
 }
 
 func mapConversationMessage(message model.Message) ConversationMessage {
