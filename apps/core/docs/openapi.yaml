@@ -19,6 +19,7 @@ tags:
   - name: payments
   - name: media
   - name: ai
+  - name: merchant
 paths:
   /auth/login:
     post:
@@ -578,6 +579,347 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AIPolishResponse'
+  /merchant/stores:
+    get:
+      tags: [merchant]
+      summary: List my stores
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Owned stores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Store'
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+    post:
+      tags: [merchant]
+      summary: Create a merchant store
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreCreateRequest'
+      responses:
+        '201':
+          description: Store created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Store'
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}:
+    patch:
+      tags: [merchant]
+      summary: Update an owned store
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreUpdateRequest'
+      responses:
+        '200':
+          description: Store updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Store'
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+    delete:
+      tags: [merchant]
+      summary: Delete an owned store
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      responses:
+        '200': { description: Store deleted }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/activate:
+    post:
+      tags: [merchant]
+      summary: Publish an owned store
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      responses:
+        '200': { description: Store published }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/deactivate:
+    post:
+      tags: [merchant]
+      summary: Hide an owned store
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      responses:
+        '200': { description: Store hidden }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/coupons:
+    get:
+      tags: [merchant]
+      summary: List all coupons for an owned store
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      responses:
+        '200':
+          description: Store coupons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MerchantCoupon'
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+    post:
+      tags: [merchant]
+      summary: Create a store coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponCreateRequest'
+      responses:
+        '201':
+          description: Coupon created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MerchantCoupon'
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/coupons/{couponId}:
+    patch:
+      tags: [merchant]
+      summary: Update a store coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+        - $ref: '#/components/parameters/CouponID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponUpdateRequest'
+      responses:
+        '200':
+          description: Coupon updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MerchantCoupon'
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+    delete:
+      tags: [merchant]
+      summary: Delete a store coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+        - $ref: '#/components/parameters/CouponID'
+      responses:
+        '200': { description: Coupon deleted }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/coupons/{couponId}/enable:
+    post:
+      tags: [merchant]
+      summary: Enable a store coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+        - $ref: '#/components/parameters/CouponID'
+      responses:
+        '200': { description: Coupon enabled }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/stores/{id}/coupons/{couponId}/disable:
+    post:
+      tags: [merchant]
+      summary: Disable a store coupon
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StoreID'
+        - $ref: '#/components/parameters/CouponID'
+      responses:
+        '200': { description: Coupon disabled }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/dishes:
+    get:
+      tags: [merchant]
+      summary: List my dishes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Merchant dishes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dish'
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+    post:
+      tags: [merchant]
+      summary: Create a dish
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishUpsertRequest'
+      responses:
+        '201':
+          description: Dish created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Dish'
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/dishes/{id}:
+    patch:
+      tags: [merchant]
+      summary: Update a dish
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DishID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DishUpdateRequest'
+      responses:
+        '200': { description: Dish updated }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+    delete:
+      tags: [merchant]
+      summary: Delete a dish
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DishID'
+      responses:
+        '200': { description: Dish deleted }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/dishes/{id}/enable:
+    post:
+      tags: [merchant]
+      summary: Enable a dish
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DishID'
+      responses:
+        '200': { description: Dish enabled }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
+  /merchant/dishes/{id}/disable:
+    post:
+      tags: [merchant]
+      summary: Disable a dish
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DishID'
+      responses:
+        '200': { description: Dish disabled }
+        '400': { $ref: '#/components/responses/ErrorResponse' }
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+        '403': { $ref: '#/components/responses/ErrorResponse' }
+        '404': { $ref: '#/components/responses/ErrorResponse' }
 components:
   securitySchemes:
     bearerAuth:
@@ -591,6 +933,28 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+  parameters:
+    StoreID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    CouponID:
+      name: couponId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    DishID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
   schemas:
     Error:
       type: object
@@ -837,3 +1201,178 @@ components:
           maxItems: 3
           items:
             type: string
+    StoreHour:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        store_id: { type: integer, format: int64 }
+        day_of_week: { type: integer }
+        open_time: { type: string }
+        close_time: { type: string }
+        is_closed: { type: boolean }
+    Store:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        merchant_id: { type: integer, format: int64 }
+        name: { type: string }
+        description: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        zip_code: { type: string }
+        country: { type: string }
+        phone: { type: string }
+        website: { type: string }
+        cover_image_url: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        menu_images:
+          type: array
+          items: { type: string }
+        status: { type: integer }
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreHour'
+    StoreCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        zip_code: { type: string }
+        country: { type: string }
+        phone: { type: string }
+        website: { type: string }
+        cover_image_url: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        menu_images:
+          type: array
+          items: { type: string }
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreHour'
+    StoreUpdateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        zip_code: { type: string }
+        country: { type: string }
+        phone: { type: string }
+        website: { type: string }
+        cover_image_url: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        menu_images:
+          type: array
+          items: { type: string }
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/StoreHour'
+    Dish:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        merchant_id: { type: integer, format: int64 }
+        name: { type: string }
+        image_url: { type: string }
+        description: { type: string }
+        original_price: { type: number, format: double }
+        category: { type: string }
+        status: { type: string, enum: [active, disabled] }
+    DishUpsertRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        image_url: { type: string }
+        description: { type: string }
+        original_price: { type: number, format: double, minimum: 0 }
+        category: { type: string }
+    DishUpdateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        image_url: { type: string }
+        description: { type: string }
+        original_price: { type: number, format: double, minimum: 0 }
+        category: { type: string }
+    MerchantCoupon:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        merchant_id: { type: integer, format: int64 }
+        store_id: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        type: { type: string }
+        coupon_type: { type: string }
+        price: { type: number, format: double, minimum: 0 }
+        original_price: { type: number, format: double, minimum: 0 }
+        sale_price: { type: number, format: double, minimum: 0 }
+        discount_percentage: { type: number, format: double, minimum: 0, maximum: 100 }
+        dish_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        total_quantity: { type: integer, minimum: 1 }
+        claimed_count: { type: integer, minimum: 0 }
+        max_per_user: { type: integer, minimum: 1 }
+        status: { type: string, enum: [draft, active, disabled, sold_out, expired, scheduled] }
+    CouponCreateRequest:
+      type: object
+      required: [title, type, total_quantity, max_per_user]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        type: { type: string }
+        coupon_type: { type: string }
+        price: { type: number, format: double, minimum: 0 }
+        original_price: { type: number, format: double, minimum: 0 }
+        sale_price: { type: number, format: double, minimum: 0 }
+        discount_percentage: { type: number, format: double, minimum: 0, maximum: 100 }
+        image_url: { type: string }
+        dish_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        total_quantity: { type: integer, minimum: 1 }
+        max_per_user: { type: integer, minimum: 1 }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        terms: { type: string }
+        status: { type: string, enum: [draft, active, disabled] }
+    CouponUpdateRequest:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        coupon_type: { type: string }
+        price: { type: number, format: double, minimum: 0 }
+        original_price: { type: number, format: double, minimum: 0 }
+        sale_price: { type: number, format: double, minimum: 0 }
+        discount_percentage: { type: number, format: double, minimum: 0, maximum: 100 }
+        image_url: { type: string }
+        dish_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        total_quantity: { type: integer, minimum: 1 }
+        max_per_user: { type: integer, minimum: 1 }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        clear_valid_from: { type: boolean, description: Explicitly clear valid_from when true }
+        clear_valid_until: { type: boolean, description: Explicitly clear valid_until and expiry_date when true }
+        terms: { type: string }
+        status: { type: string, enum: [draft, active, disabled] }

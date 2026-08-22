@@ -109,6 +109,48 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+func TestLoginDerivesMerchantRoleFromOwnership(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	authService := NewService(db, testJWTConfig, testSMTPConfig)
+
+	ctx := context.Background()
+	user, err := authService.Register(ctx, "merchant-owner", "merchant-owner@example.com", "securepass", "http://localhost")
+	if err != nil {
+		t.Fatalf("failed to register merchant owner: %v", err)
+	}
+	var verification model.EmailVerification
+	if err := db.Where("user_id = ?", user.ID).First(&verification).Error; err != nil {
+		t.Fatalf("failed to find verification record: %v", err)
+	}
+	if err := authService.VerifyEmail(ctx, verification.Token); err != nil {
+		t.Fatalf("failed to verify merchant owner: %v", err)
+	}
+
+	if err := db.Create(&model.Merchant{UserID: &user.ID, Name: "Owned Merchant"}).Error; err != nil {
+		t.Fatalf("failed to create merchant ownership row: %v", err)
+	}
+
+	tokens, err := authService.Login(ctx, "merchant-owner@example.com", "securepass", "127.0.0.1")
+	if err != nil {
+		t.Fatalf("merchant owner login failed: %v", err)
+	}
+	claims, err := token.New(testJWTConfig).ValidateToken(tokens.AccessToken)
+	if err != nil {
+		t.Fatalf("failed to validate issued token: %v", err)
+	}
+	if claims["role"] != "merchant" {
+		t.Fatalf("expected ownership-backed token role merchant, got %v", claims["role"])
+	}
+
+	var storedUser model.User
+	if err := db.First(&storedUser, user.ID).Error; err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if storedUser.Role != "user" {
+		t.Fatalf("role derivation must not rewrite persisted user role, got %q", storedUser.Role)
+	}
+}
+
 func TestUserProfileHasCounts(t *testing.T) {
 	db := testutil.SetupTestDB(t)
 	type Column struct{ Name string }

@@ -86,6 +86,12 @@ func TestStoreServiceCreate(t *testing.T) {
 	if store.Images != "[\"https://img.example/1.jpg\",\"https://img.example/2.jpg\"]" {
 		t.Fatalf("unexpected images json: %s", store.Images)
 	}
+	if len(store.Hours) != 2 {
+		t.Fatalf("expected created store response to preload 2 hours, got %d", len(store.Hours))
+	}
+	if store.Hours[0].DayOfWeek != 1 || store.Hours[1].DayOfWeek != 2 {
+		t.Fatalf("unexpected preloaded hours in create response: %+v", store.Hours)
+	}
 
 	var refreshed model.Merchant
 	if err := db.First(&refreshed, merchant.ID).Error; err != nil {
@@ -784,6 +790,9 @@ func TestStoreServiceListMine(t *testing.T) {
 	if err := db.Create(&otherStore).Error; err != nil {
 		t.Fatalf("failed to create other store: %v", err)
 	}
+	if err := db.Create(&model.StoreHour{StoreID: myStore.ID, DayOfWeek: 3, OpenTime: "10:00", CloseTime: "20:00"}).Error; err != nil {
+		t.Fatalf("failed to create my store hours: %v", err)
+	}
 
 	stores, err := svc.ListMine(context.Background(), userID, nil)
 	if err != nil {
@@ -794,6 +803,9 @@ func TestStoreServiceListMine(t *testing.T) {
 	}
 	if stores[0].ID != myStore.ID {
 		t.Fatalf("unexpected mine store id: got %d, want %d", stores[0].ID, myStore.ID)
+	}
+	if len(stores[0].Hours) != 1 || stores[0].Hours[0].DayOfWeek != 3 {
+		t.Fatalf("expected ListMine to preload hours, got %+v", stores[0].Hours)
 	}
 }
 

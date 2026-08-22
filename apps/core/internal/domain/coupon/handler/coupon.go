@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/coupon/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 )
 
 type CouponHandler struct {
@@ -56,6 +56,8 @@ type UpdateStoreCouponRequest struct {
 	MaxPerUser         *int       `json:"max_per_user"`
 	ValidFrom          *time.Time `json:"valid_from"`
 	ValidUntil         *time.Time `json:"valid_until"`
+	ClearValidFrom     bool       `json:"clear_valid_from"`
+	ClearValidUntil    bool       `json:"clear_valid_until"`
 	Terms              *string    `json:"terms"`
 	Status             *string    `json:"status"`
 }
@@ -272,6 +274,7 @@ func parseStoreAndCouponID(c *gin.Context) (int64, int64, bool) {
 // @Produce json
 // @Param id path int true "Store ID"
 // @Param couponId path int true "Coupon ID"
+// @Param request body UpdateStoreCouponRequest true "Update store coupon request"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
@@ -294,12 +297,22 @@ func (h *CouponHandler) UpdateStoreCoupon(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if (req.ClearValidFrom && req.ValidFrom != nil) || (req.ClearValidUntil && req.ValidUntil != nil) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "clear and set time fields cannot be combined"})
+		return
+	}
 	var validFrom, validUntil **time.Time
-	if req.ValidFrom != nil {
+	if req.ClearValidFrom {
+		var cleared *time.Time
+		validFrom = &cleared
+	} else if req.ValidFrom != nil {
 		v := req.ValidFrom
 		validFrom = &v
 	}
-	if req.ValidUntil != nil {
+	if req.ClearValidUntil {
+		var cleared *time.Time
+		validUntil = &cleared
+	} else if req.ValidUntil != nil {
 		v := req.ValidUntil
 		validUntil = &v
 	}
@@ -340,6 +353,14 @@ func (h *CouponHandler) setStoreCouponEnabled(c *gin.Context, enabled bool) {
 // @Summary Enable store coupon
 // @Tags coupon
 // @Produce json
+// @Param id path int true "Store ID"
+// @Param couponId path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/stores/{id}/coupons/{couponId}/enable [post]
 func (h *CouponHandler) EnableStoreCoupon(c *gin.Context) { h.setStoreCouponEnabled(c, true) }
@@ -348,6 +369,14 @@ func (h *CouponHandler) EnableStoreCoupon(c *gin.Context) { h.setStoreCouponEnab
 // @Summary Disable store coupon
 // @Tags coupon
 // @Produce json
+// @Param id path int true "Store ID"
+// @Param couponId path int true "Coupon ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 403 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
 // @Security BearerAuth
 // @Router /merchant/stores/{id}/coupons/{couponId}/disable [post]
 func (h *CouponHandler) DisableStoreCoupon(c *gin.Context) { h.setStoreCouponEnabled(c, false) }

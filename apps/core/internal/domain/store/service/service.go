@@ -174,7 +174,17 @@ func (s *StoreService) Create(ctx context.Context, userID int64, req dto.CreateS
 		return nil, err
 	}
 
-	return &store, nil
+	var created model.Store
+	if err := s.db.WithContext(ctx).
+		Preload("Hours").
+		Preload("Categories").
+		First(&created, store.ID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrStoreNotFound
+		}
+		return nil, err
+	}
+	return &created, nil
 }
 
 func (s *StoreService) ListPublished(ctx context.Context) ([]model.Store, error) {
@@ -324,7 +334,10 @@ func (s *StoreService) ListMine(ctx context.Context, userID int64, limit *int) (
 	}
 
 	var stores []model.Store
-	if err := dbQuery.Find(&stores).Error; err != nil {
+	if err := dbQuery.
+		Preload("Hours").
+		Preload("Categories").
+		Find(&stores).Error; err != nil {
 		return nil, err
 	}
 	return stores, nil

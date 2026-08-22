@@ -527,6 +527,63 @@ func TestCouponServiceUpdateForStoreRejectsInvertedDateRange(t *testing.T) {
 	}
 }
 
+func TestCouponServiceUpdateForStoreClearsCouponDates(t *testing.T) {
+	db := setupCouponTestDB(t)
+	svc := NewCouponService(db)
+
+	ownerID := int64(993)
+	if err := db.Create(&model.User{ID: ownerID, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create owner: %v", err)
+	}
+	merchant := model.Merchant{Name: "Owner Merchant", UserID: &ownerID}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+	store := model.Store{MerchantID: merchant.ID, Name: "Store", Status: storeStatusPublished}
+	if err := db.Create(&store).Error; err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	storeID := store.ID
+	validFrom := time.Date(2026, 8, 21, 10, 0, 0, 0, time.UTC)
+	validUntil := time.Date(2026, 8, 25, 10, 0, 0, 0, time.UTC)
+	coupon := model.Coupon{
+		MerchantID:    merchant.ID,
+		StoreID:       &storeID,
+		Title:         "Clear Dates Coupon",
+		Type:          "cash",
+		TotalQuantity: 10,
+		MaxPerUser:    1,
+		Status:        couponStatusActive,
+		ValidFrom:     &validFrom,
+		ValidUntil:    &validUntil,
+		ExpiryDate:    validUntil,
+	}
+	if err := db.Create(&coupon).Error; err != nil {
+		t.Fatalf("failed to create coupon: %v", err)
+	}
+
+	clearFrom := (*time.Time)(nil)
+	clearUntil := (*time.Time)(nil)
+	updated, err := svc.UpdateForStore(context.Background(), ownerID, store.ID, coupon.ID, UpdateStoreCouponInput{
+		ValidFrom:  &clearFrom,
+		ValidUntil: &clearUntil,
+	})
+	if err != nil {
+		t.Fatalf("clear dates returned error: %v", err)
+	}
+	if updated.ValidFrom != nil || updated.ValidUntil != nil {
+		t.Fatalf("expected dates to be cleared, got from=%v until=%v", updated.ValidFrom, updated.ValidUntil)
+	}
+
+	var refreshed model.Coupon
+	if err := db.First(&refreshed, coupon.ID).Error; err != nil {
+		t.Fatalf("failed to re-fetch coupon: %v", err)
+	}
+	if refreshed.ValidFrom != nil || refreshed.ValidUntil != nil || !refreshed.ExpiryDate.IsZero() {
+		t.Fatalf("expected persisted dates and expiry to be cleared, got from=%v until=%v expiry=%v", refreshed.ValidFrom, refreshed.ValidUntil, refreshed.ExpiryDate)
+	}
+}
+
 func TestCouponServiceUpdateForStoreRejectsInvalidStatus(t *testing.T) {
 	db := setupCouponTestDB(t)
 	svc := NewCouponService(db)
@@ -556,5 +613,131 @@ func TestCouponServiceUpdateForStoreRejectsInvalidStatus(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalidCouponInput) {
 		t.Fatalf("expected ErrInvalidCouponInput for invalid status, got %v", err)
+	}
+}
+
+func TestCouponServiceCreateForStoreRejectsDerivedStatusAndForeignDish(t *testing.T) {
+	db := setupCouponTestDB(t)
+	svc := NewCouponService(db)
+
+	ownerID := int64(993)
+	otherOwnerID := int64(994)
+	for _, id := range []int64{ownerID, otherOwnerID} {
+		if err := db.Create(&model.User{ID: id, Role: "user", Status: 0}).Error; err != nil {
+			t.Fatalf("failed to create user %d: %v", id, err)
+		}
+	}
+	owner := model.Merchant{Name: "Owner", UserID: &ownerID}
+	other := model.Merchant{Name: "Other", UserID: &otherOwnerID}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatalf("failed to create owner merchant: %v", err)
+	}
+	if err := db.Create(&other).Error; err != nil {
+		t.Fatalf("failed to create other merchant: %v", err)
+	}
+	store := model.Store{MerchantID: owner.ID, Name: "Store", Status: storeStatusPublished}
+	if err := db.Create(&store).Error; err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	dish := model.Dish{MerchantID: other.ID, Name: "Foreign Dish", Status: "active"}
+	if err := db.Create(&dish).Error; err != nil {
+		t.Fatalf("failed to create foreign dish: %v", err)
+	}
+
+	derivedStatus := "sold_out"
+	_, err := svc.CreateForStore(context.Background(), ownerID, store.ID, CreateStoreCouponInput{
+		Title: "Invalid Status", Type: "cash", Status: derivedStatus, TotalQuantity: 10, MaxPerUser: 1,
+	})
+	if !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected derived status to be rejected, got %v", err)
+	}
+
+	_, err = svc.CreateForStore(context.Background(), ownerID, store.ID, CreateStoreCouponInput{
+		Title: "Foreign Dish", Type: "cash", DishIDs: []int64{dish.ID}, TotalQuantity: 10, MaxPerUser: 1,
+	})
+	if !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected foreign dish to be rejected, got %v", err)
+	}
+}
+
+func TestCouponServiceUpdateForStoreRejectsInvalidQuantityPricingAndDish(t *testing.T) {
+	db := setupCouponTestDB(t)
+	svc := NewCouponService(db)
+
+	ownerID := int64(995)
+	if err := db.Create(&model.User{ID: ownerID, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create owner: %v", err)
+	}
+	merchant := model.Merchant{Name: "Owner", UserID: &ownerID}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+	store := model.Store{MerchantID: merchant.ID, Name: "Store", Status: storeStatusPublished}
+	if err := db.Create(&store).Error; err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	storeID := store.ID
+	coupon := model.Coupon{
+		MerchantID: merchant.ID, StoreID: &storeID, Title: "Coupon", Type: "cash",
+		Price: 10, OriginalPrice: 20, SalePrice: 10, TotalQuantity: 10, ClaimedCount: 2,
+		MaxPerUser: 1, Status: couponStatusActive,
+	}
+	if err := db.Create(&coupon).Error; err != nil {
+		t.Fatalf("failed to create coupon: %v", err)
+	}
+
+	zero := 0
+	if _, err := svc.UpdateForStore(context.Background(), ownerID, store.ID, coupon.ID, UpdateStoreCouponInput{TotalQuantity: &zero}); !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected zero total quantity to be rejected, got %v", err)
+	}
+
+	tooLow := 1
+	if _, err := svc.UpdateForStore(context.Background(), ownerID, store.ID, coupon.ID, UpdateStoreCouponInput{TotalQuantity: &tooLow}); !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected quantity below claimed count to be rejected, got %v", err)
+	}
+
+	badSale := 25.0
+	if _, err := svc.UpdateForStore(context.Background(), ownerID, store.ID, coupon.ID, UpdateStoreCouponInput{SalePrice: &badSale}); !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected sale price above original price to be rejected, got %v", err)
+	}
+
+	missingDish := int64(99999)
+	if _, err := svc.UpdateForStore(context.Background(), ownerID, store.ID, coupon.ID, UpdateStoreCouponInput{DishIDs: &[]int64{missingDish}}); !errors.Is(err, ErrInvalidCouponInput) {
+		t.Fatalf("expected missing dish to be rejected, got %v", err)
+	}
+}
+
+func TestCouponServiceListPublishedByStoreExcludesComputedSoldOut(t *testing.T) {
+	db := setupCouponTestDB(t)
+	svc := NewCouponService(db)
+
+	ownerID := int64(996)
+	if err := db.Create(&model.User{ID: ownerID, Role: "user", Status: 0}).Error; err != nil {
+		t.Fatalf("failed to create owner: %v", err)
+	}
+	merchant := model.Merchant{Name: "Owner", UserID: &ownerID}
+	if err := db.Create(&merchant).Error; err != nil {
+		t.Fatalf("failed to create merchant: %v", err)
+	}
+	store := model.Store{MerchantID: merchant.ID, Name: "Store", Status: storeStatusPublished}
+	if err := db.Create(&store).Error; err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	storeID := store.ID
+	for _, coupon := range []model.Coupon{
+		{MerchantID: merchant.ID, StoreID: &storeID, Title: "Available", Type: "cash", TotalQuantity: 10, ClaimedCount: 1, MaxPerUser: 1, Status: couponStatusActive},
+		{MerchantID: merchant.ID, StoreID: &storeID, Title: "Sold Out", Type: "cash", TotalQuantity: 10, ClaimedCount: 10, MaxPerUser: 1, Status: couponStatusActive},
+	} {
+		if err := db.Create(&coupon).Error; err != nil {
+			t.Fatalf("failed to create coupon %q: %v", coupon.Title, err)
+		}
+	}
+
+	coupons, err := svc.ListPublishedByStore(context.Background(), store.ID)
+	if err != nil {
+		t.Fatalf("list published returned error: %v", err)
+	}
+	if len(coupons) != 1 || coupons[0].Title != "Available" {
+		t.Fatalf("expected only available coupon, got %+v", coupons)
 	}
 }
