@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	notificationservice "github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
@@ -257,6 +259,7 @@ func (s *AdminService) UpdateMerchant(ctx context.Context, adminID, merchantID i
 		}
 		return nil, err
 	}
+	previousVerificationStatus := merchant.VerificationStatus
 
 	if input.Status != nil {
 		merchant.Status = *input.Status
@@ -273,6 +276,23 @@ func (s *AdminService) UpdateMerchant(ctx context.Context, adminID, merchantID i
 	if err := tx.Save(&merchant).Error; err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+	if input.VerificationStatus != nil && previousVerificationStatus != verificationStatus && merchant.UserID != nil {
+		now := time.Now().UTC()
+		if _, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+			RecipientID: *merchant.UserID,
+			Type:        model.NotificationTypeMerchantVerificationChanged,
+			Title:       "Merchant verification updated",
+			Content:     fmt.Sprintf("Your merchant verification status is now %s.", verificationStatus),
+			Data: map[string]interface{}{
+				"merchant_id": merchant.ID,
+				"status":      verificationStatus,
+			},
+			DedupKey: fmt.Sprintf("merchant_verification:%d:%s:%d", merchant.ID, verificationStatus, now.UnixNano()),
+		}); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 
 	details := map[string]interface{}{}

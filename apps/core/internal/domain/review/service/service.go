@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
+	notificationservice "github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/review/dto"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
@@ -122,7 +124,7 @@ func (s *ReviewService) Like(ctx context.Context, userID, reviewID int64) error 
 		var existing model.Like
 		if err := tx.Where("user_id = ? AND target_type = ? AND target_id = ?", userID, "review", reviewID).
 			First(&existing).Error; err == nil {
-			return nil
+			return createReviewLikeNotification(ctx, tx, review, userID)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -136,7 +138,10 @@ func (s *ReviewService) Like(ctx context.Context, userID, reviewID int64) error 
 			return err
 		}
 
-		return tx.Model(&review).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error
+		if err := tx.Model(&review).UpdateColumn("like_count", gorm.Expr("like_count + 1")).Error; err != nil {
+			return err
+		}
+		return createReviewLikeNotification(ctx, tx, review, userID)
 	})
 }
 
@@ -150,8 +155,44 @@ func (s *ReviewService) Comment(ctx context.Context, userID, reviewID int64, tex
 		if err := tx.Create(&comment).Error; err != nil {
 			return err
 		}
-		return tx.Model(&review).UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+		if err := tx.Model(&review).UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error; err != nil {
+			return err
+		}
+		if review.UserID == userID {
+			return nil
+		}
+		_, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+			RecipientID: review.UserID,
+			Type:        model.NotificationTypeReviewCommented,
+			Title:       "New comment on your review",
+			Content:     "Someone commented on your review.",
+			Data: map[string]interface{}{
+				"review_id":  review.ID,
+				"comment_id": comment.ID,
+				"actor_id":   userID,
+			},
+			DedupKey: fmt.Sprintf("review_commented:%d", comment.ID),
+		})
+		return err
 	})
+}
+
+func createReviewLikeNotification(ctx context.Context, tx *gorm.DB, review model.Review, actorID int64) error {
+	if review.UserID == actorID {
+		return nil
+	}
+	_, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+		RecipientID: review.UserID,
+		Type:        model.NotificationTypeReviewLiked,
+		Title:       "Your review was liked",
+		Content:     "Someone liked your review.",
+		Data: map[string]interface{}{
+			"review_id": review.ID,
+			"actor_id":  actorID,
+		},
+		DedupKey: fmt.Sprintf("review_liked:%d:%d", review.ID, actorID),
+	})
+	return err
 }
 
 func syncMerchantReviewAggregates(tx *gorm.DB, merchantID int64) error {

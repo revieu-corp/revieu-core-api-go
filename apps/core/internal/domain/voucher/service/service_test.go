@@ -25,6 +25,7 @@ func setupVoucherTestDB(t *testing.T) *gorm.DB {
 		&model.Store{},
 		&model.Coupon{},
 		&model.Voucher{},
+		&model.Notification{},
 	); err != nil {
 		t.Fatalf("failed to migrate test db: %v", err)
 	}
@@ -167,6 +168,15 @@ func TestVoucherServiceRedeemByMerchantAllowsSoftDeletedCoupon(t *testing.T) {
 	}
 	if refreshedCoupon.RedeemedCount != 1 {
 		t.Fatalf("expected redeemed_count=1, got %d", refreshedCoupon.RedeemedCount)
+	}
+	var notificationCount int64
+	if err := db.Model(&model.Notification{}).
+		Where("type = ? AND (user_id = ? OR user_id = ?)", model.NotificationTypeVoucherRedeemed, customerUserID, merchantUserID).
+		Count(&notificationCount).Error; err != nil {
+		t.Fatalf("failed to count redemption notifications: %v", err)
+	}
+	if notificationCount != 2 {
+		t.Fatalf("expected customer and merchant notifications, got %d", notificationCount)
 	}
 }
 

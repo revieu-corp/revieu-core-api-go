@@ -22,7 +22,7 @@ func setupAdminTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Report{}, &model.AdminAuditLog{}, &model.Merchant{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Report{}, &model.AdminAuditLog{}, &model.Merchant{}, &model.Notification{}); err != nil {
 		t.Fatalf("failed to migrate admin test db: %v", err)
 	}
 	return db

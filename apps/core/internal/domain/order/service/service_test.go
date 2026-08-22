@@ -104,6 +104,16 @@ func TestPayCreatesVoucherScanTokens(t *testing.T) {
 	if tokens[0] == tokens[1] {
 		t.Fatalf("expected unique voucher scan tokens, got %#v", tokens)
 	}
+
+	var notificationCount int64
+	if err := svc.db.Model(&model.Notification{}).
+		Where("user_id = ? AND type = ?", buyer.ID, model.NotificationTypeOrderPaid).
+		Count(&notificationCount).Error; err != nil {
+		t.Fatalf("failed to count order notifications: %v", err)
+	}
+	if notificationCount != 1 {
+		t.Fatalf("expected one order-paid notification, got %d", notificationCount)
+	}
 }
 
 func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {
@@ -137,5 +147,14 @@ func TestPayIdempotentKeepsExistingVoucherScanTokens(t *testing.T) {
 		if firstTokens[i] != secondTokens[i] {
 			t.Fatalf("expected token %d to remain stable, got first=%q second=%q", i, firstTokens[i], secondTokens[i])
 		}
+	}
+	var notificationCount int64
+	if err := svc.db.Model(&model.Notification{}).
+		Where("user_id = ? AND type = ?", buyer.ID, model.NotificationTypeOrderPaid).
+		Count(&notificationCount).Error; err != nil {
+		t.Fatalf("failed to count order notifications: %v", err)
+	}
+	if notificationCount != 1 {
+		t.Fatalf("expected idempotent order notification, got %d", notificationCount)
 	}
 }

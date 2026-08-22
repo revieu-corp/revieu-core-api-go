@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
+	notificationservice "github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
@@ -21,14 +24,14 @@ type SubmitVerificationInput struct {
 }
 
 type VerificationStatusView struct {
-	ID                int64   `json:"id"`
-	MerchantID        int64   `json:"merchant_id"`
-	Status            string  `json:"status"`
-	MerchantStatus    string  `json:"merchant_status"`
-	DocumentType      string  `json:"document_type"`
-	DocumentURL       string  `json:"document_url"`
-	BusinessLicense   string  `json:"business_license"`
-	RejectionReason   string  `json:"rejection_reason"`
+	ID              int64  `json:"id"`
+	MerchantID      int64  `json:"merchant_id"`
+	Status          string `json:"status"`
+	MerchantStatus  string `json:"merchant_status"`
+	DocumentType    string `json:"document_type"`
+	DocumentURL     string `json:"document_url"`
+	BusinessLicense string `json:"business_license"`
+	RejectionReason string `json:"rejection_reason"`
 }
 
 var ErrVerificationInvalidInput = errors.New("verification invalid input")
@@ -45,50 +48,74 @@ func (s *VerificationService) Submit(ctx context.Context, userID int64, input Su
 		return nil, ErrVerificationInvalidInput
 	}
 
-	merchant, err := s.ensureMerchant(ctx, userID)
+	var view *VerificationStatusView
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		merchant, err := s.ensureMerchantTx(tx, userID)
+		if err != nil {
+			return err
+		}
+		previousStatus := merchant.VerificationStatus
+
+		var verification model.MerchantVerification
+		err = tx.Where("merchant_id = ?", merchant.ID).
+			Order("id desc").
+			First(&verification).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			verification = model.MerchantVerification{
+				MerchantID:      merchant.ID,
+				DocumentType:    strings.TrimSpace(input.DocumentType),
+				DocumentURL:     strings.TrimSpace(input.DocumentURL),
+				BusinessLicense: strings.TrimSpace(input.BusinessLicense),
+				Status:          "pending",
+			}
+			if err := tx.Create(&verification).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		} else {
+			verification.DocumentType = strings.TrimSpace(input.DocumentType)
+			verification.DocumentURL = strings.TrimSpace(input.DocumentURL)
+			verification.BusinessLicense = strings.TrimSpace(input.BusinessLicense)
+			verification.Status = "pending"
+			verification.RejectionReason = ""
+			if err := tx.Save(&verification).Error; err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Model(&model.Merchant{}).
+			Where("id = ?", merchant.ID).
+			Update("verification_status", "pending").Error; err != nil {
+			return err
+		}
+		merchant.VerificationStatus = "pending"
+
+		if previousStatus != "pending" {
+			now := time.Now().UTC()
+			if _, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+				RecipientID: userID,
+				Type:        model.NotificationTypeMerchantVerificationChanged,
+				Title:       "Verification submitted",
+				Content:     "Your merchant verification submission is now under review.",
+				Data: map[string]interface{}{
+					"merchant_id": merchant.ID,
+					"status":      "pending",
+				},
+				DedupKey: fmt.Sprintf("merchant_verification:%d:pending:%d", merchant.ID, now.UnixNano()),
+			}); err != nil {
+				return err
+			}
+		}
+
+		mapped := mapVerificationView(verification, merchant)
+		view = &mapped
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	var verification model.MerchantVerification
-	err = s.db.WithContext(ctx).
-		Where("merchant_id = ?", merchant.ID).
-		Order("id desc").
-		First(&verification).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		verification = model.MerchantVerification{
-			MerchantID:      merchant.ID,
-			DocumentType:    strings.TrimSpace(input.DocumentType),
-			DocumentURL:     strings.TrimSpace(input.DocumentURL),
-			BusinessLicense: strings.TrimSpace(input.BusinessLicense),
-			Status:          "pending",
-		}
-		if err := s.db.WithContext(ctx).Create(&verification).Error; err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	} else {
-		verification.DocumentType = strings.TrimSpace(input.DocumentType)
-		verification.DocumentURL = strings.TrimSpace(input.DocumentURL)
-		verification.BusinessLicense = strings.TrimSpace(input.BusinessLicense)
-		verification.Status = "pending"
-		verification.RejectionReason = ""
-		if err := s.db.WithContext(ctx).Save(&verification).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	if err := s.db.WithContext(ctx).
-		Model(&model.Merchant{}).
-		Where("id = ?", merchant.ID).
-		Update("verification_status", "pending").Error; err != nil {
-		return nil, err
-	}
-	merchant.VerificationStatus = "pending"
-
-	view := mapVerificationView(verification, merchant)
-	return &view, nil
+	return view, nil
 }
 
 func (s *VerificationService) Status(ctx context.Context, userID int64) (*VerificationStatusView, error) {
@@ -119,8 +146,12 @@ func (s *VerificationService) Status(ctx context.Context, userID int64) (*Verifi
 }
 
 func (s *VerificationService) ensureMerchant(ctx context.Context, userID int64) (*model.Merchant, error) {
+	return s.ensureMerchantTx(s.db.WithContext(ctx), userID)
+}
+
+func (s *VerificationService) ensureMerchantTx(db *gorm.DB, userID int64) (*model.Merchant, error) {
 	var merchant model.Merchant
-	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&merchant).Error; err == nil {
+	if err := db.Where("user_id = ?", userID).First(&merchant).Error; err == nil {
 		return &merchant, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -131,7 +162,7 @@ func (s *VerificationService) ensureMerchant(ctx context.Context, userID int64) 
 		Name:               "merchant",
 		VerificationStatus: "unverified",
 	}
-	if err := s.db.WithContext(ctx).Create(&merchant).Error; err != nil {
+	if err := db.Create(&merchant).Error; err != nil {
 		return nil, err
 	}
 	return &merchant, nil

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/verification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -23,7 +23,7 @@ func setupVerificationTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to open test db: %v", err)
 	}
 
-	if err := db.AutoMigrate(&model.User{}, &model.Merchant{}, &model.MerchantVerification{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Merchant{}, &model.MerchantVerification{}, &model.Notification{}); err != nil {
 		t.Fatalf("failed to migrate verification test db: %v", err)
 	}
 
@@ -130,5 +130,14 @@ func TestVerificationHandlerSubmitCreatesSubmission(t *testing.T) {
 	}
 	if verification.DocumentURL != "https://example.com/new-license.pdf" {
 		t.Fatalf("expected document url to persist, got %q", verification.DocumentURL)
+	}
+	var notificationCount int64
+	if err := db.Model(&model.Notification{}).
+		Where("user_id = ? AND type = ?", user.ID, model.NotificationTypeMerchantVerificationChanged).
+		Count(&notificationCount).Error; err != nil {
+		t.Fatalf("failed to count verification notifications: %v", err)
+	}
+	if notificationCount != 1 {
+		t.Fatalf("expected one verification notification, got %d", notificationCount)
 	}
 }

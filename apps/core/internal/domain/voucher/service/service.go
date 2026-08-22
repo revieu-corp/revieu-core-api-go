@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	notificationservice "github.com/revieu-corp/revieu-core-api-go/apps/core/internal/domain/notification/service"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/internal/model"
 	"github.com/revieu-corp/revieu-core-api-go/apps/core/pkg/database"
 	"gorm.io/gorm"
@@ -254,9 +255,12 @@ func (s *VoucherService) RedeemByMerchantToken(ctx context.Context, merchantUser
 			return err
 		}
 
-		return tx.Unscoped().Model(&model.Coupon{}).
+		if err := tx.Unscoped().Model(&model.Coupon{}).
 			Where("id = ?", coupon.ID).
-			UpdateColumn("redeemed_count", gorm.Expr("redeemed_count + 1")).Error
+			UpdateColumn("redeemed_count", gorm.Expr("redeemed_count + 1")).Error; err != nil {
+			return err
+		}
+		return createVoucherRedeemedNotifications(ctx, tx, voucher, coupon, merchantUserID)
 	})
 }
 
@@ -310,10 +314,40 @@ func (s *VoucherService) RedeemByMerchant(ctx context.Context, userID, voucherID
 			return err
 		}
 
-		return tx.Unscoped().Model(&model.Coupon{}).
+		if err := tx.Unscoped().Model(&model.Coupon{}).
 			Where("id = ?", coupon.ID).
-			UpdateColumn("redeemed_count", gorm.Expr("redeemed_count + 1")).Error
+			UpdateColumn("redeemed_count", gorm.Expr("redeemed_count + 1")).Error; err != nil {
+			return err
+		}
+		return createVoucherRedeemedNotifications(ctx, tx, voucher, coupon, userID)
 	})
+}
+
+func createVoucherRedeemedNotifications(ctx context.Context, tx *gorm.DB, voucher model.Voucher, coupon model.Coupon, merchantUserID int64) error {
+	data := map[string]interface{}{
+		"voucher_id": voucher.ID,
+		"coupon_id":  coupon.ID,
+		"status":     "used",
+	}
+	if _, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+		RecipientID: voucher.UserID,
+		Type:        model.NotificationTypeVoucherRedeemed,
+		Title:       "Voucher redeemed",
+		Content:     "Your voucher has been redeemed by the merchant.",
+		Data:        data,
+		DedupKey:    fmt.Sprintf("voucher_redeemed:user:%d", voucher.ID),
+	}); err != nil {
+		return err
+	}
+	_, _, err := notificationservice.CreateEventTx(ctx, tx, notificationservice.EventInput{
+		RecipientID: merchantUserID,
+		Type:        model.NotificationTypeVoucherRedeemed,
+		Title:       "Voucher redemption recorded",
+		Content:     fmt.Sprintf("Voucher %s was redeemed successfully.", voucher.Code),
+		Data:        data,
+		DedupKey:    fmt.Sprintf("voucher_redeemed:merchant:%d", voucher.ID),
+	})
+	return err
 }
 
 func generateVoucherScanToken() (string, error) {
